@@ -38,6 +38,21 @@ _VAR_FROM_NULL_CMP = re.compile(
 )
 _VAR_FROM_REQUIRE = re.compile(r"\brequireNonNull\s*\(\s*(\w+)|\bcheckNotNull\s*\(\s*(\w+)")
 
+# Java method declarations: optional modifiers + return type + name + parens
+# + optional throws clause + opening brace. Conservative — only fires on the
+# canonical "public/private/protected" forms to avoid false positives on
+# arbitrary call sites that happen to live on the same line.
+_NEW_METHOD_DECL = re.compile(
+    r"\b(?:public|private|protected)\s+(?:static\s+|final\s+|abstract\s+|synchronized\s+)*"
+    r"[\w<>\[\],\s?]+?\s+\w+\s*\([^)]*\)\s*(?:throws\s+[\w,\s]+)?\s*\{?"
+)
+
+# Java type declarations: class / interface / enum / record.
+_NEW_TYPE_DECL = re.compile(
+    r"\b(?:public|private|protected)\s+(?:static\s+|final\s+|abstract\s+)*"
+    r"(?:class|interface|enum|record)\s+\w+"
+)
+
 
 def classify_line(line: str, *, neighbours: Sequence[str] = ()) -> NullCheckKind:
     """Classify a single added line into a :class:`NullCheckKind`.
@@ -141,6 +156,56 @@ def variable_used_before(file_diff: FileDiff) -> bool:
     return any(re.search(rf"\b{re.escape(v)}\b", haystack) for v in candidates)
 
 
+def fix_replaces_existing_use(file_diff: FileDiff) -> bool:
+    """True when the null-guarded variable also appears in the removed lines.
+
+    A real ``missNullCheckP`` fix typically REMOVES a vulnerable use and
+    REPLACES it with a guarded one (e.g. ``array[i].getClass()`` becomes
+    ``array[i] == null ? null : array[i].getClass()``). When this pattern
+    is present we have strong evidence that an existing bug is being
+    repaired, not that brand-new defensive code is being introduced.
+
+    The check looks at removed lines only: appearance of the protected
+    variable elsewhere in the file (context) is covered by
+    :func:`variable_used_before`.
+    """
+    candidates = _variables_protected_by_null_check(file_diff.added_lines)
+    if not candidates:
+        return False
+    removed_text = " ".join(file_diff.removed_lines)
+    if not removed_text.strip():
+        return False
+    return any(re.search(rf"\b{re.escape(v)}\b", removed_text) for v in candidates)
+
+
+def adds_new_method_declaration(file_diff: FileDiff) -> bool:
+    """True when this file looks like a *pure addition* of new declarations.
+
+    Returns True only when:
+
+    1. The added lines introduce at least one method/class/interface/enum
+       declaration that is NOT present in the removed lines.
+    2. The file has NO removed lines at all — i.e. it is being created or
+       only appended to.
+
+    The second clause is what keeps real bug fixes safe. A fix that refactors
+    code (extracts a helper method, splits a function) introduces a new
+    declaration AND removes the old body. The "pure addition" case captures
+    the actual false-positive class we want to filter: a brand-new feature
+    method that happens to contain a defensive null check at the top.
+    """
+    added_decls = _declarations_in(file_diff.added_lines)
+    if not added_decls:
+        return False
+    removed_decls = _declarations_in(file_diff.removed_lines)
+    if not (added_decls - removed_decls):
+        return False
+    # File has any removed content at all? Then it's not a pure addition.
+    if file_diff.removed_lines:
+        return False
+    return True
+
+
 def is_bugfix_message(message: str) -> bool:
     """Heuristic: does the commit message look like a bugfix?
 
@@ -171,10 +236,9 @@ def extract_evidence(commit: Commit) -> Evidence:
     """Aggregate all per-evidence detectors into a single :class:`Evidence`.
 
     Test files are excluded from the structural evidences (null check, var
-    used before) because the ``missNullCheckP`` pattern targets repair in
-    production code; assertions in tests are not bug fixes. This keeps
-    ``extract_evidence`` and :func:`find_matches` consistent: a commit whose
-    only ``.java`` changes are in tests scores zero and produces no matches.
+    used before, fix replaces use, new method declaration) because the
+    ``missNullCheckP`` pattern targets repair in production code; assertions
+    in tests are not bug fixes.
     """
     java_files = tuple(f for f in commit.files if f.path.endswith(".java"))
     production_files = tuple(f for f in java_files if not _is_test_path(f.path))
@@ -185,6 +249,8 @@ def extract_evidence(commit: Commit) -> Evidence:
     construct = detect_null_check(all_added)
     null_check = construct is not NullCheckKind.NONE
     var_used_before = any(variable_used_before(f) for f in target_files)
+    replaces_use = any(fix_replaces_existing_use(f) for f in target_files)
+    new_method = any(adds_new_method_declaration(f) for f in target_files)
     bugfix = is_bugfix_message(commit.message)
     size = diff_size_lines(commit.files)
     tests_only = touches_test_files_only(commit.files)
@@ -192,7 +258,9 @@ def extract_evidence(commit: Commit) -> Evidence:
     return Evidence(
         has_null_check_added=null_check,
         null_check_construct=construct,
+        fix_replaces_existing_use=replaces_use,
         var_was_used_before=var_used_before,
+        adds_new_method_declaration=new_method,
         is_likely_bugfix=bugfix,
         diff_size_lines=size,
         touches_test_files_only=tests_only,
@@ -222,3 +290,22 @@ def _variables_protected_by_null_check(added_lines: Sequence[str]) -> tuple[str,
 
 def _is_test_path(path: str) -> bool:
     return any(marker in path for marker in config.JAVA_TEST_PATH_MARKERS)
+
+
+def _declarations_in(lines: Sequence[str]) -> set[str]:
+    """Return the set of method/type declaration signatures found in ``lines``.
+
+    Signatures are normalised (collapsed whitespace) so that "moved" methods
+    appearing in both added and removed lines compare equal.
+    """
+    decls: set[str] = set()
+    for line in lines:
+        for match in _NEW_METHOD_DECL.finditer(line):
+            decls.add(_normalise_signature(match.group(0)))
+        for match in _NEW_TYPE_DECL.finditer(line):
+            decls.add(_normalise_signature(match.group(0)))
+    return decls
+
+
+def _normalise_signature(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip().rstrip("{").strip()

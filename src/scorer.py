@@ -26,9 +26,22 @@ def score(evidence: Evidence) -> float:
 
     Two structural evidences are eliminatory: a commit must add a null check
     AND the check must match a canonical construct. Either being absent
-    forces the score to zero, regardless of the other evidences. The
-    remaining two evidences (variable previously used, bugfix-style message)
-    are descriptive confirmations and only adjust the score upward.
+    forces the score to zero, regardless of the other evidences.
+
+    Positive confirmations add to the score:
+
+    - ``fix_replaces_existing_use`` (0.15): the protected variable also
+      appears in removed lines — strong fix signal.
+    - ``var_was_used_before`` (0.05): protected variable appears in context.
+    - ``is_likely_bugfix`` (0.05): bugfix-style commit message.
+
+    A negative signal subtracts after the positives:
+
+    - ``adds_new_method_declaration`` (-0.20): the commit introduces a new
+      method/type alongside the null check, suggesting defensive scaffolding
+      in fresh code rather than a fix to existing logic.
+
+    The final value is clamped to the [0.0, 1.0] interval.
     """
     if not evidence.has_null_check_added:
         return 0.0
@@ -36,10 +49,15 @@ def score(evidence: Evidence) -> float:
         return 0.0
 
     total = config.W_NULL_CHECK_ADDED + config.W_CANONICAL_CONSTRUCT
+    if evidence.fix_replaces_existing_use:
+        total += config.W_FIX_REPLACES_USE
     if evidence.var_was_used_before:
         total += config.W_VAR_USED_BEFORE
     if evidence.is_likely_bugfix:
         total += config.W_BUGFIX_MESSAGE
+    if evidence.adds_new_method_declaration:
+        total -= config.PENALTY_ADDS_NEW_METHOD
+    total = max(0.0, min(1.0, total))
     return round(total, 4)
 
 

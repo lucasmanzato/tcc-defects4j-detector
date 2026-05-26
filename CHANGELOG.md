@@ -8,6 +8,142 @@ métricas de cada estágio.
 
 ---
 
+## v0.2.0-fp-filter — Filtros para reduzir falsos positivos (2026-05-02)
+
+**Status:** funcional · recall 100% no ground truth (mantido) · FPs reduzidos
+em ~29% no estudo de caso `google/error-prone`.
+
+### Motivação
+
+A v0.1.0 atingiu recall de 100%, mas inspeção manual dos candidatos em
+repositórios reais revelou um padrão de **falso positivo**: commits que
+introduzem código completamente novo (uma nova função, classe ou
+funcionalidade) já vêm com `if (x == null) ...` no topo como código
+defensivo. Estruturalmente, isso passa por todos os indícios da v0.1.0
+mesmo não sendo correção de bug.
+
+Esta versão adiciona dois novos sinais estruturais que distinguem
+*fix de bug existente* de *código novo defensivo*.
+
+### O que mudou
+
+#### Sinal 1 — "A linha desprotegida foi REMOVIDA?" (positivo)
+
+Nova evidência `fix_replaces_existing_use`: True quando a variável que está
+sendo protegida pelo null check **também aparece nas linhas removidas** do
+mesmo arquivo. Isso é a assinatura clássica de uma correção:
+
+```diff
+- classes[i] = array[i].getClass();              ← array usado SEM proteção
++ classes[i] = array[i] == null ? ... : ...      ← array agora protegido
+```
+
+Peso: **0,15** (forte sinal positivo, redistribuído de `var_was_used_before`).
+
+#### Sinal 2 — "É adição pura de método novo?" (negativo)
+
+Nova evidência `adds_new_method_declaration`: True quando o arquivo:
+1. Adiciona declaração de método, classe, interface, enum ou record, E
+2. Não tem nenhuma linha removida (adição pura).
+
+A segunda condição é o que protege correções legítimas que extraem
+métodos auxiliares — refactor + fix é comum e não deve ser penalizado.
+
+Penalidade: **-0,20** no score final, com clamp em 0.
+
+### Novos pesos
+
+```
+W_NULL_CHECK_ADDED       = 0,50  (eliminatório, inalterado)
+W_CANONICAL_CONSTRUCT    = 0,25  (eliminatório, inalterado)
+W_FIX_REPLACES_USE       = 0,15  ← novo
+W_VAR_USED_BEFORE        = 0,05  (reduzido de 0,20)
+W_BUGFIX_MESSAGE         = 0,05  (inalterado)
+PENALTY_ADDS_NEW_METHOD  = -0,20 ← novo
+```
+
+Soma dos positivos: 1,00. Penalidade subtraída no fim. Score final
+sempre em [0,0; 1,0].
+
+### Cálculo no caso real (bugfix do Lang 33)
+
+```
++ classes[i] = array[i] == null ? null : array[i].getClass();
+- classes[i] = array[i].getClass();
+```
+
+- null check adicionado: +0,50
+- ternário (canônico): +0,25
+- "array" também aparece em linha removida: +0,15 (Sinal 1 dispara)
+- "array" no contexto do hunk: +0,05
+- mensagem "[LANG-587] avoid NPE": +0,05
+- nenhum método novo declarado: penalty=0
+- **Total: 1,00 ✓** (mesmo score da v0.1.0 para esse fix)
+
+### Cálculo no caso falso positivo (código novo defensivo)
+
+```
++ public Result process(Input input) {
++   if (input == null) return Result.empty();
++   return Result.ok(input.value());
++ }
+```
+
+- null check adicionado: +0,50
+- guard_return (canônico): +0,25
+- "input" NÃO aparece em linha removida: +0
+- "input" no contexto: +0
+- mensagem sem keyword: +0
+- declaração de método nova em adição pura: penalty -0,20
+- **Total: 0,55 < 0,70 → descartado ✓**
+
+### Métricas após a mudança
+
+Validação contra ground truth (Defects4J Dissection):
+
+| Approach | Recall v0.1.0 | Recall v0.2.0 |
+|----------|--------------:|--------------:|
+| Detector | 18/18 (100%) | **18/18 (100%)** |
+| Baseline | 6/18 (33%) | 6/18 (33%) |
+
+Estudos de caso (mesmos repos, mesmo `--limit 500`):
+
+| Repo | v0.1.0 commits flagrados | v0.2.0 commits flagrados | Redução |
+|------|-----------------------:|-----------------------:|--------:|
+| google/error-prone | 49 | 35 | **−29%** |
+| JodaOrg/joda-time | 9 | 8 | −11% |
+
+### Observação metodológica importante
+
+Durante a calibração, três bugs do ground truth (Closure 43, 103, 127)
+foram brevemente perdidos porque o detector inicial de `adds_new_method`
+disparava em qualquer adição de método. Inspeção dos diffs reais
+mostrou que esses commits **são refatorações + fix** — extraem método
+helper e adicionam null check.
+
+A correção foi tornar o sinal *condicional*: só dispara quando o
+arquivo é adição pura (sem remoções). Isso preserva o recall completo
+sem perder o poder de filtrar FPs verdadeiros (que são, por definição,
+adições puras de código novo).
+
+### Componentes desta versão
+
+- **Pipeline:** 10 módulos em `src/` (inalterado)
+- **Scripts CLI:** 7 (inalterado)
+- **Testes:** 71 (era 57 — +14 cobrindo os novos sinais)
+- **Padrões cobertos:** 1 (`missNullCheckP`)
+- **Variações sintáticas reconhecidas:** 5 (inalterado)
+
+### Limitação que permanece
+
+O sinal `adds_new_method_declaration` é **conservador** (só dispara em
+adição pura). Pode haver FPs onde o commit também remove algumas linhas
+não relacionadas (logging, comentários, formatação) e, ainda assim, o
+núcleo do código é adição de nova feature. Iterações futuras podem
+explorar essa fronteira com sinais mais refinados.
+
+---
+
 ## v0.1.0-baseline — Detector estrutural funcional (2026-05-02)
 
 **Status:** funcional · recall 100% no ground truth · produz falsos

@@ -8,11 +8,13 @@ import pytest
 
 from src.diff_parser import parse_unified_diff
 from src.features import (
+    adds_new_method_declaration,
     classify_line,
     detect_null_check,
     diff_size_lines,
     extract_evidence,
     find_matches,
+    fix_replaces_existing_use,
     has_null_check_added,
     is_bugfix_message,
     touches_test_files_only,
@@ -88,6 +90,129 @@ def test_variable_used_before_false_when_var_brand_new():
     assert variable_used_before(fd) is False
 
 
+# --- fix_replaces_existing_use ----------------------------------------------
+def test_fix_replaces_existing_use_true_when_var_in_removed():
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=("classes[i] = array[i] == null ? null : array[i].getClass();",),
+        removed_lines=("classes[i] = array[i].getClass();",),
+        context_lines=(),
+    )
+    assert fix_replaces_existing_use(fd) is True
+
+
+def test_fix_replaces_existing_use_false_when_no_removed_uses():
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=("if (input == null) return Result.empty();",),
+        removed_lines=(),
+        context_lines=(),
+    )
+    assert fix_replaces_existing_use(fd) is False
+
+
+def test_fix_replaces_existing_use_false_when_unrelated_removal():
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=("if (input == null) return;",),
+        removed_lines=("logger.info('hi');",),
+        context_lines=(),
+    )
+    assert fix_replaces_existing_use(fd) is False
+
+
+def test_fix_replaces_use_lang33_fixture():
+    files = parse_unified_diff(_read("lang_33.diff"))
+    assert fix_replaces_existing_use(files[0]) is True
+
+
+# --- adds_new_method_declaration --------------------------------------------
+def test_adds_new_method_declaration_true_for_pure_addition_of_method():
+    """The canonical false positive: a fresh method with a null check at top
+    and zero removed lines in the file."""
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=(
+            "public Result process(Input input) {",
+            "if (input == null) return Result.empty();",
+            "return Result.ok(input.value());",
+            "}",
+        ),
+        removed_lines=(),
+        context_lines=(),
+    )
+    assert adds_new_method_declaration(fd) is True
+
+
+def test_adds_new_method_declaration_true_for_new_class():
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=(
+            "public class FooHelper {",
+            "if (x == null) return;",
+            "}",
+        ),
+        removed_lines=(),
+        context_lines=(),
+    )
+    assert adds_new_method_declaration(fd) is True
+
+
+def test_adds_new_method_declaration_false_when_file_also_removes_lines():
+    """A fix that adds a helper method while also removing code is a refactor
+    + fix, not a pure addition. Penalty must NOT fire."""
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=(
+            "private void newHelper(Node n) {",
+            "if (n == null) return;",
+            "n.process();",
+            "}",
+        ),
+        removed_lines=("oldInlineCall(n);",),
+        context_lines=(),
+    )
+    assert adds_new_method_declaration(fd) is False
+
+
+def test_adds_new_method_declaration_false_when_only_modifying_body():
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=("if (x == null) return null;",),
+        removed_lines=("// stub",),
+        context_lines=("public void existingMethod() {",),
+    )
+    assert adds_new_method_declaration(fd) is False
+
+
+def test_adds_new_method_declaration_false_when_method_moved():
+    """A method present in both added and removed lines is a move (refactor)."""
+    signature = "public Result existing(Input input) {"
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=(signature, "if (input == null) return null;", "}"),
+        removed_lines=(signature, "// old body", "}"),
+        context_lines=(),
+    )
+    assert adds_new_method_declaration(fd) is False
+
+
+def test_adds_new_method_declaration_false_on_lang33_fixture():
+    """Lang 33 is a one-line fix inside an existing method, never introduces
+    a new declaration. This test guards against the regex incorrectly
+    matching ordinary code lines."""
+    files = parse_unified_diff(_read("lang_33.diff"))
+    assert adds_new_method_declaration(files[0]) is False
+
+
 # --- is_bugfix_message -------------------------------------------------------
 @pytest.mark.parametrize(
     "msg,expected",
@@ -133,7 +258,9 @@ def test_extract_evidence_for_lang33_like_commit():
     ev = extract_evidence(commit)
     assert ev.has_null_check_added is True
     assert ev.null_check_construct is NullCheckKind.TERNARY
+    assert ev.fix_replaces_existing_use is True
     assert ev.var_was_used_before is True
+    assert ev.adds_new_method_declaration is False
     assert ev.is_likely_bugfix is True
     assert ev.touches_test_files_only is False
     assert ev.diff_size_lines >= 2

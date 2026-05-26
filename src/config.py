@@ -22,17 +22,28 @@ W_NULL_CHECK_ADDED = 0.50
 # repair from a one-off comparison embedded in unrelated logic. (Eliminatory.)
 W_CANONICAL_CONSTRUCT = 0.25
 
-# Code-context evidence: the protected variable was already referenced before
-# the patch. Strong confirmation that the change is a fix to existing logic
-# rather than eager validation around a freshly introduced variable.
-W_VAR_USED_BEFORE = 0.20
+# Strong fix signal: the variable now being null-guarded also appears in the
+# same file's removed lines. That means an existing, unprotected use was
+# REPLACED by a protected one — the canonical shape of a real
+# missNullCheckP fix. Distinguishes a fix from defensive code in a brand-new
+# method (which has no removed lines mentioning the variable).
+W_FIX_REPLACES_USE = 0.15
+
+# Weaker code-context evidence: the protected variable appears in the hunk's
+# few context lines (no extra API request). Useful but partial; reduced
+# weight to make room for ``W_FIX_REPLACES_USE`` above.
+W_VAR_USED_BEFORE = 0.05
 
 # Descriptive evidence only: bugfix-style language in the commit message
 # ("npe", "fix null", ...). Kept very low because commit messages are
-# unreliable: the actual code change is the source of truth. Removing it
-# from a candidate that already passes the structural checks must still
-# leave a near-perfect score (1.00 - 0.05 = 0.95).
+# unreliable: the actual code change is the source of truth.
 W_BUGFIX_MESSAGE = 0.05
+
+# Negative signal applied after the positive weights: the commit introduces
+# a new method or type declaration alongside the null check. Strong sign that
+# the null check is defensive scaffolding in fresh code, not a fix.
+# Subtracted from the final score (clamped to 0).
+PENALTY_ADDS_NEW_METHOD = 0.20
 
 # --- confidence thresholds (high >= 0.7 per project requirement) -------------
 SCORE_LOW_MAX = 0.5

@@ -64,11 +64,37 @@ class Commit:
 
 @dataclass(frozen=True)
 class Evidence:
-    """Structural evidences extracted from a commit's diff."""
+    """Structural evidences extracted from a commit's diff.
+
+    Fields:
+        has_null_check_added: a null comparison or requireNonNull was added.
+            Eliminatory: absence forces score = 0.
+        null_check_construct: which canonical form (guard_return, ternary, ...).
+            Eliminatory: NONE forces score = 0.
+        fix_replaces_existing_use: the variable now being null-guarded also
+            appears in the same file's removed lines. Strong signal that the
+            commit replaces a buggy use with a protected one (real bug fix),
+            as opposed to introducing fresh defensive code.
+        var_was_used_before: the protected variable appears in the hunk's
+            context lines. Weaker confirmation than fix_replaces_existing_use
+            because the context window is only ~3 lines.
+        adds_new_method_declaration: the commit's added lines introduce a new
+            method or type declaration. When True together with the null
+            check, the change is more likely defensive scaffolding in new
+            code than a fix to existing logic. Used as a score penalty.
+        is_likely_bugfix: commit message contains bugfix-language. Weakest
+            evidence because messages are unreliable.
+        diff_size_lines: total added + removed lines (used only for
+            confidence downgrade, not for scoring).
+        touches_test_files_only: every changed file is a test (used only
+            for confidence downgrade, not for scoring).
+    """
 
     has_null_check_added: bool
     null_check_construct: NullCheckKind
+    fix_replaces_existing_use: bool
     var_was_used_before: bool
+    adds_new_method_declaration: bool
     is_likely_bugfix: bool
     diff_size_lines: int
     touches_test_files_only: bool
