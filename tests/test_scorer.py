@@ -1,0 +1,81 @@
+"""Tests for the scorer: weight math and confidence thresholds."""
+from __future__ import annotations
+
+import pytest
+
+from src import config
+from src.models import Evidence, NullCheckKind
+from src.scorer import confidence_level, score
+
+
+def _ev(
+    *,
+    has_null: bool = True,
+    kind: NullCheckKind = NullCheckKind.GUARD_RETURN,
+    used_before: bool = True,
+    bugfix: bool = True,
+    size: int = 10,
+    tests_only: bool = False,
+) -> Evidence:
+    return Evidence(
+        has_null_check_added=has_null,
+        null_check_construct=kind,
+        var_was_used_before=used_before,
+        is_likely_bugfix=bugfix,
+        diff_size_lines=size,
+        touches_test_files_only=tests_only,
+    )
+
+
+def test_score_zero_when_no_null_check():
+    assert score(_ev(has_null=False, kind=NullCheckKind.NONE)) == 0.0
+
+
+def test_score_full_evidence_reaches_one():
+    assert score(_ev()) == pytest.approx(1.0)
+
+
+def test_score_zero_when_construct_is_none_even_with_null_flag():
+    # Eliminatory rule: a null check without a recognised canonical construct
+    # is treated as no-match, regardless of the descriptive evidences.
+    assert score(_ev(kind=NullCheckKind.NONE)) == 0.0
+
+
+def test_score_null_check_plus_canonical_only():
+    s = score(_ev(used_before=False, bugfix=False))
+    assert s == pytest.approx(config.W_NULL_CHECK_ADDED + config.W_CANONICAL_CONSTRUCT)
+
+
+def test_score_canonical_plus_var_used_before():
+    s = score(_ev(bugfix=False))
+    expected = (
+        config.W_NULL_CHECK_ADDED
+        + config.W_CANONICAL_CONSTRUCT
+        + config.W_VAR_USED_BEFORE
+    )
+    assert s == pytest.approx(expected)
+
+
+def test_score_above_threshold_for_strong_evidence():
+    assert score(_ev()) >= config.DEFAULT_MIN_SCORE
+
+
+def test_confidence_low_below_05():
+    s = config.SCORE_LOW_MAX - 0.01
+    assert confidence_level(s, _ev()) == "low"
+
+
+def test_confidence_medium_between_05_and_07():
+    assert confidence_level(0.6, _ev()) == "medium"
+
+
+def test_confidence_high_for_clean_strong_match():
+    assert confidence_level(0.85, _ev(size=20)) == "high"
+
+
+def test_confidence_medium_when_diff_is_huge():
+    assert confidence_level(0.85, _ev(size=config.LARGE_DIFF_LINES + 1)) == "medium"
+
+
+def test_confidence_medium_when_only_tests_touched():
+    assert confidence_level(0.85, _ev(tests_only=True)) == "medium"

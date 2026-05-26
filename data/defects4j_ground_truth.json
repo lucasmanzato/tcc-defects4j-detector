@@ -1,0 +1,182 @@
+[
+  {
+    "project": "Closure",
+    "bug_id": 2,
+    "fix_commit_sha": "d1cfe67977d8f3aaa85ec20c262171da394d5977",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 20,
+    "fix_commit_sha": "ebf229b05f4ee71bc05d70830f5dd5683271d661",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 30,
+    "fix_commit_sha": "38e2b8f247423734adec3dbd76fa22da1a3561a8",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 43,
+    "fix_commit_sha": "f636f23bdef4b27752ca249a28463ec1b6af1f0b",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 103,
+    "fix_commit_sha": "2f5cb1622371de540fe20dcbe0411651ec89f952",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 110,
+    "fix_commit_sha": "13fb7fcbcad87f8df63535491627bf7b01471064",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 127,
+    "fix_commit_sha": "211dc0161ae737f59cac22f30b048d56a059d14b",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 32,
+    "fix_commit_sha": "006fca88e86bd6f650d4d021d2ff3573a572827d",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 33,
+    "fix_commit_sha": "0603aef594fa60126c2d45f2ab164eee39f7b44c",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 39,
+    "fix_commit_sha": "cb40e35f5e0990fad4c5278964fcc24e112dde8c",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 47,
+    "fix_commit_sha": "d5e343049c2610c31ddacb24f0d173942f6d5ac9",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 4,
+    "fix_commit_sha": "277e61721f34be16a20da663fd597edf6b51939b",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 32,
+    "fix_commit_sha": "f81847d8079753ce45b049813730055188a22efb",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 4,
+    "fix_commit_sha": "42b391d4209024292b6101048389570e4ec36b2a",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 23,
+    "fix_commit_sha": "82935114a09390cbab0c6b6df9b6fd6788bf55d9",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 29,
+    "fix_commit_sha": "918f0a5aed6454b307004b6c9c86afc8e96353ff",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 38,
+    "fix_commit_sha": "c1f2c4e6b5bab4cfc004f22999e11e8ac140d377",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Time",
+    "bug_id": 2,
+    "fix_commit_sha": "8612f9e5b88c1bea933ef9ab1e431f5db3006b48",
+    "github_repo": "JodaOrg/joda-time",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Time",
+    "bug_id": 20,
+    "fix_commit_sha": "a92450e88df85d6b7a0fa53517da46286c24f53f",
+    "github_repo": "JodaOrg/joda-time",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Time",
+    "bug_id": 27,
+    "fix_commit_sha": "e0559c503f65641b9546c37e7c84c866caf37e66",
+    "github_repo": "JodaOrg/joda-time",
+    "patterns": [
+      "missNullCheckP"
+    ]
+  }
+]
