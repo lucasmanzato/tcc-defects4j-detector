@@ -5,9 +5,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from src.diff_parser import parse_unified_diff
-from src.features import extract_evidence
 from src.models import Commit, CommitCandidate
-from src.scorer import confidence_level, score
+from src.patterns.miss_null_check_p import MissNullCheckPDetector
+
+_DETECTOR = MissNullCheckPDetector()
+extract_evidence = _DETECTOR.extract_evidence
+score = _DETECTOR.score
+confidence_level = _DETECTOR.confidence_level
 
 
 def test_lang33_pipeline_yields_high_score_candidate():

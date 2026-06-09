@@ -1,4 +1,10 @@
-"""Tests for feature extraction using real Defects4J diffs as fixtures."""
+"""Tests for the missNullCheckP pattern detector.
+
+Uses real Defects4J diffs as fixtures. Each function under test now lives
+in ``src/patterns/miss_null_check_p.py``; the detector class
+``MissNullCheckPDetector`` orchestrates them through
+``extract_evidence`` / ``score`` / ``find_matches``.
+"""
 from __future__ import annotations
 
 from datetime import datetime
@@ -7,13 +13,12 @@ from pathlib import Path
 import pytest
 
 from src.diff_parser import parse_unified_diff
-from src.features import (
+from src.patterns.miss_null_check_p import (
+    MissNullCheckPDetector,
     adds_new_method_declaration,
     classify_line,
     detect_null_check,
     diff_size_lines,
-    extract_evidence,
-    find_matches,
     fix_replaces_existing_use,
     has_null_check_added,
     is_bugfix_message,
@@ -21,6 +26,10 @@ from src.features import (
     variable_used_before,
 )
 from src.models import Commit, FileDiff, NullCheckKind
+
+_DETECTOR = MissNullCheckPDetector()
+extract_evidence = _DETECTOR.extract_evidence
+find_matches = _DETECTOR.find_matches
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

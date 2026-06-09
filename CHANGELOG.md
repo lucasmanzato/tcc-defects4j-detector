@@ -8,6 +8,180 @@ métricas de cada estágio.
 
 ---
 
+## v0.3.0-multi-pattern — Suporte a múltiplos padrões (2026-06-02)
+
+**Status:** em desenvolvimento · adiciona o padrão `condBlockRetAdd` ao lado
+do `missNullCheckP`, demonstrando que a arquitetura é genérica e
+extensível.
+
+### Por que `condBlockRetAdd` e não `wrongComp`
+
+A escolha do segundo padrão passou por uma análise empírica documentada
+para fins de defesa do TCC.
+
+**Tentativa inicial: `wrongComp` (58 bugs no Defects4J Dissection)**
+
+O nome sugere "comparação errada" — supus que se tratava de troca de
+operador (`<` ↔ `<=`, `==` ↔ `!=`, etc.). Seria estruturalmente
+detectável: comparar operadores nas linhas removidas vs. adicionadas.
+
+Ao examinar os 58 bugs reais classificados sob esse padrão no Defects4J,
+descobri que:
+
+- **1 / 58** é troca pura de operador (Lang 50: `!=` → `==`)
+- **7 / 58** mudam o operando da comparação (typos de variável)
+- **50 / 58** são refatorações complexas envolvendo comparações
+  (substituem método inteiro, mudam comparação por iteração, etc.)
+
+`wrongComp` no catálogo é uma categoria **semântica** ("o bug envolve
+comparação errada"), não **estrutural** ("o diff mostra troca de
+operador"). Detectar isso via regex daria recall de ~10% — não validaria
+a arquitetura.
+
+**Escolha final: `condBlockRetAdd` (77 bugs, 68 sem overlap com
+`missNullCheckP`)**
+
+Esse padrão é estruturalmente bem definido: "o fix adicionou um bloco
+`if (condição) { return ...; }` (ou sua forma compacta de uma linha)".
+
+Argumentos da escolha:
+
+1. **Estruturalmente detectável** — ~95% dos casos cabem na máscara
+   regex, ao contrário dos ~10% do `wrongComp`.
+2. **Ground truth grande e independente** — 77 bugs, 68 sem overlap com
+   `missNullCheckP`.
+3. **Generalização forte para o TCC** — `missNullCheckP guard_return`
+   é um *caso particular* de `condBlockRetAdd` onde a condição é
+   `(x == null)`. Mostrar os dois padrões evidencia que o sistema é uma
+   **plataforma genérica** com casos especiais especializados.
+4. **Reuso arquitetural** — os sinais introduzidos na v0.2.0
+   (`fix_replaces_existing_use`, `adds_new_method_declaration`) se
+   aplicam diretamente, validando que esses sinais são *transversais*
+   aos padrões e não específicos do null check.
+
+A tentativa frustrada com `wrongComp` é material direto para a seção de
+metodologia do TCC: ilustra o **processo iterativo** de escolha de
+padrões e a importância da **inspeção empírica** antes de comprometer
+implementação.
+
+### Arquitetura introduzida
+
+Para suportar múltiplos padrões sem acoplar o pipeline a nenhum deles,
+extraímos o detector para um pacote dedicado:
+
+```
+src/patterns/
+  __init__.py                # registry: PATTERNS dict
+  base.py                    # PatternDetector ABC + BaseEvidence
+  miss_null_check_p.py       # detector existente migrado
+  cond_block_ret_add.py      # detector novo
+```
+
+Cada padrão é uma classe que implementa quatro métodos (`extract_evidence`,
+`score`, `confidence_level`, `find_matches`) e mora num único arquivo
+com sua própria regex, seu Evidence dataclass e seus pesos. Adicionar um
+terceiro padrão no futuro é uma operação local: 1 arquivo novo +
+registrar no `__init__.py`. Nada na orquestração (cliente GitHub, parser
+de diff, CLIs, relatório) muda.
+
+### O detector novo
+
+Reconhece quatro formas canônicas de `if (cond) return`:
+
+| Forma | Exemplo |
+|---|---|
+| `bare_return` | `if (!ready) { return; }` |
+| `return_value` | `if (n.isDelProp()) { return true; }` |
+| `return_expression` | `if (size > MAX) { return defaultValue(); }` |
+| `compact_one_line` | `if (foo == null) return null;` |
+
+A condição é extraída por um **parser de parênteses balanceados**, não
+regex. Isso é o que permite reconhecer:
+
+- Chamadas aninhadas: `if (Modifier.isAbstract(invocation.getMethod().getModifiers()))`
+- Condições multi-linha:
+  ```java
+  if (var != null
+      && var.getParentNode().isCatch()) {
+  ```
+
+A regex original não suportava paren-aninhado e detectava apenas ~86% do
+ground truth; após a substituição pelo parser, subimos para 95%, e
+removendo a penalidade `adds_new_method_declaration` (semanticamente
+inadequada para este padrão), atingimos **98% (57/58)**.
+
+### Calibração dos pesos
+
+Idêntica à v0.2.0 do `missNullCheckP`, com uma diferença documentada:
+
+| Peso | missNullCheckP | condBlockRetAdd |
+|---|---|---|
+| `W_*_ADDED` (eliminatório) | 0,50 | 0,50 |
+| `W_CANONICAL_*` (eliminatório) | 0,25 | 0,25 |
+| `W_FIX_REPLACES_USE` | 0,15 | 0,15 |
+| `W_VAR_USED_BEFORE` | 0,05 | 0,05 |
+| `W_BUGFIX_MESSAGE` | 0,05 | 0,05 |
+| `PENALTY_ADDS_NEW_METHOD` | -0,20 | **(omitido)** |
+
+O motivo da omissão da penalidade para `condBlockRetAdd`: adicionar um
+guard-return no topo de um método recém-declarado é uma forma frequente
+de fix legítimo (override de `equals`/`compareTo` que checa o tipo logo
+no começo — Lang 23 e Lang 64 do ground truth são exatamente isso). No
+`missNullCheckP` o mesmo cenário caracteriza código defensivo novo
+(falso positivo); a polaridade do sinal **muda entre padrões**.
+
+### Métricas observadas
+
+| Padrão | Bugs alcançáveis | Recall | Baseline |
+|---|---:|---:|---:|
+| `missNullCheckP` | 18 | **100% (18/18)** | 33% |
+| `condBlockRetAdd` | 58 | **98% (57/58)** | 2% |
+
+Estudo de caso comparativo (`apache/commons-lang`, últimos 500 commits):
+
+| Padrão | Commits flagrados | Pontos no código | Arquivos |
+|---|---:|---:|---:|
+| `missNullCheckP` | 15 | 20 | 12 |
+| `condBlockRetAdd` | 25 | 63 | 16 |
+
+O `condBlockRetAdd` flagra mais commits, como esperado (padrão mais
+amplo). Os top candidatos coincidem em vários casos com `missNullCheckP`
+(`Fix NullPointerException...` em `ReflectionDiffBuilder`), confirmando
+empiricamente que `missNullCheckP guard_return` é um caso particular de
+`condBlockRetAdd`.
+
+### Menu interativo
+
+O CLI `scripts/run_interactive.py` agora pergunta:
+
+1. URL ou `owner/name` do repositório
+2. Qual padrão buscar (`missNullCheckP`, `condBlockRetAdd`, ou *ambos*)
+
+Os outros parâmetros continuam no default (`limit=500`, `min_score=0.7`).
+A lista de padrões é montada dinamicamente a partir do registry, então
+adicionar uma terceira opção no futuro aparece automaticamente no menu.
+Arquivos de saída ganham sufixo do padrão (`<repo>__<pattern>.json`)
+para não sobreescreverem quando os dois padrões rodam no mesmo repo.
+
+### Limitação documentada
+
+O único bug do ground truth de `condBlockRetAdd` que o detector não
+encontra é **Closure 94**: a correção introduz um `case X: return Y;`
+dentro de um `switch`, em vez de um `if`. A máscara estrutural é
+deliberadamente restrita a `if`-guards (forma mais comum nos 71 bugs do
+ground truth); estender para `switch-case` exigiria reformular a base
+da regra. Marcado como trabalho futuro.
+
+### Componentes desta versão
+
+- **Pipeline:** 11 módulos em `src/` (incluindo `src/patterns/` com 4 arquivos)
+- **Scripts CLI:** 8 (novo: `build_ground_truth_cond_block_ret_add.py`)
+- **Testes:** 94 (era 71 — +23 cobrindo o novo padrão)
+- **Padrões cobertos:** 2 (`missNullCheckP`, `condBlockRetAdd`)
+- **Ground truth:** 20 bugs (missNullCheckP) + 71 bugs (condBlockRetAdd)
+
+---
+
 ## v0.2.0-fp-filter — Filtros para reduzir falsos positivos (2026-05-02)
 
 **Status:** funcional · recall 100% no ground truth (mantido) · FPs reduzidos

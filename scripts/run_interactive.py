@@ -35,6 +35,7 @@ from src.detector import detect  # noqa: E402
 from src.github_client import GitHubClient, GitHubError  # noqa: E402
 from src.logger import setup_logging  # noqa: E402
 from src.models import CommitCandidate  # noqa: E402
+from src.patterns import PATTERNS, get_detector  # noqa: E402
 
 # Import the report builder from the sibling script so we don't duplicate
 # rendering logic.
@@ -91,14 +92,7 @@ def candidate_to_dict(c: CommitCandidate) -> dict:
         "message": c.commit.message.splitlines()[0] if c.commit.message else "",
         "url": c.commit.url,
         "date": c.commit.date.isoformat(),
-        "evidence": {
-            "has_null_check_added": c.evidence.has_null_check_added,
-            "null_check_construct": c.evidence.null_check_construct.value,
-            "var_was_used_before": c.evidence.var_was_used_before,
-            "is_likely_bugfix": c.evidence.is_likely_bugfix,
-            "diff_size_lines": c.evidence.diff_size_lines,
-            "touches_test_files_only": c.evidence.touches_test_files_only,
-        },
+        "evidence": _evidence_to_dict(c.evidence),
         "matches": [
             {
                 "file_path": m.file_path,
@@ -109,6 +103,24 @@ def candidate_to_dict(c: CommitCandidate) -> dict:
             for m in c.matches
         ],
     }
+
+
+def _evidence_to_dict(evidence: object) -> dict:
+    """Serialise any pattern-specific evidence dataclass to JSON-friendly dict.
+
+    Iterates over the dataclass fields so new patterns automatically
+    contribute their own evidences without changing this function.
+    """
+    out: dict = {}
+    fields = getattr(type(evidence), "__dataclass_fields__", {})
+    for name in fields:
+        value = getattr(evidence, name)
+        # Enums are serialised by their string value (NullCheckKind / CondReturnKind).
+        if hasattr(value, "value") and not isinstance(value, (bool, int, float)):
+            out[name] = value.value
+        else:
+            out[name] = value
+    return out
 
 
 def build_summary(candidates: list[CommitCandidate], pattern: str, repo: str, min_score: float) -> dict:
@@ -131,7 +143,11 @@ def build_summary(candidates: list[CommitCandidate], pattern: str, repo: str, mi
 
 
 def write_outputs(repo: str, candidates: list[CommitCandidate], min_score: float, pattern: str) -> tuple[Path, Path]:
-    slug = repo.replace("/", "_").lower()
+    repo_slug = repo.replace("/", "_").lower()
+    # ``pattern`` is part of the slug so running multiple patterns on the
+    # same repo produces independent output files instead of overwriting.
+    pattern_slug = re.sub(r"[^a-z0-9]+", "_", pattern.lower()).strip("_")
+    slug = f"{repo_slug}__{pattern_slug}"
     json_path = ROOT / "results" / f"{slug}.json"
     md_path = ROOT / "results" / f"{slug}_report.md"
 
@@ -174,17 +190,19 @@ def main() -> int:
             break
         print(f"  → Formato não reconhecido: {raw!r}. Tente novamente.")
 
-    # Defaults are deliberate — the script aims at a single prompt. To tune
-    # the limit or threshold, use scripts/run_detector.py (flag-driven).
+    patterns_chosen = _prompt_patterns()
+
+    # Other parameters are kept at sensible defaults — the script aims to
+    # ask only what cannot be sensibly defaulted. Use scripts/run_detector.py
+    # for full flag control.
     limit: int | None = DEFAULT_LIMIT
     min_score: float = config.DEFAULT_MIN_SCORE
-    pattern = "missNullCheckP"
 
     print()
     print(f"  Repositório:    {repo}")
     print(f"  Limite:         {limit} commits (padrão)")
     print(f"  Pontuação mín.: {min_score} (padrão)")
-    print(f"  Padrão alvo:    {pattern}")
+    print(f"  Padrão(ões):    {', '.join(patterns_chosen)}")
     print()
 
     setup_logging(logging.INFO)
@@ -192,7 +210,9 @@ def main() -> int:
     client = GitHubClient(token=token)
 
     try:
-        candidates = detect(repo, client, limit=limit, min_score=min_score)
+        results_by_pattern = _run_patterns(
+            patterns_chosen, repo, client, limit=limit, min_score=min_score
+        )
     except GitHubError as exc:
         print(f"\nERRO ao acessar GitHub: {exc}", file=sys.stderr)
         return 1
@@ -202,16 +222,94 @@ def main() -> int:
 
     elapsed = time.monotonic() - started
 
-    json_path, md_path = write_outputs(repo, candidates, min_score, pattern)
+    print()
+    banner("Resultado")
+    print(f"Tempo total: {elapsed:.1f} segundos")
+    print()
 
+    for pattern_name, candidates in results_by_pattern.items():
+        json_path, md_path = write_outputs(
+            repo, candidates, min_score, pattern_name
+        )
+        _print_pattern_summary(pattern_name, candidates, json_path, md_path)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Helpers for multi-pattern execution and presentation
+# ---------------------------------------------------------------------------
+def _prompt_patterns() -> list[str]:
+    """Ask the user which pattern(s) to detect.
+
+    The menu is built dynamically from the registry, so new patterns appear
+    automatically. ``ambos`` (or ``all``) selects every registered pattern.
+    """
+    options = list(PATTERNS.keys())
+    print()
+    print("Padrões disponíveis:")
+    for idx, name in enumerate(options, start=1):
+        desc = PATTERNS[name].description
+        print(f"  {idx}. {name} — {desc}")
+    print(f"  {len(options) + 1}. ambos (rodar todos os padrões)")
+    print()
+    while True:
+        raw = prompt(
+            "Qual padrão buscar? (número ou nome; Enter = 1)",
+            default="1",
+        ).strip().lower()
+        if not raw or raw == "1":
+            return [options[0]]
+        if raw.isdigit():
+            n = int(raw)
+            if n == len(options) + 1 or raw == str(len(options) + 1):
+                return list(options)
+            if 1 <= n <= len(options):
+                return [options[n - 1]]
+        if raw in {"ambos", "all", "todos"}:
+            return list(options)
+        # Allow direct name match.
+        for name in options:
+            if raw == name.lower():
+                return [name]
+        print(f"  → Opção não reconhecida: {raw!r}. Tente novamente.")
+
+
+def _run_patterns(
+    pattern_names: list[str],
+    repo: str,
+    client: GitHubClient,
+    limit: int | None,
+    min_score: float,
+) -> dict[str, list[CommitCandidate]]:
+    """Run each requested pattern and return the candidates grouped by name.
+
+    Patterns are executed sequentially (one full commit walk per pattern)
+    because the orchestration scores commits against a single detector at a
+    time. Future versions can interleave to share the API budget.
+    """
+    out: dict[str, list[CommitCandidate]] = {}
+    for name in pattern_names:
+        detector = get_detector(name)
+        banner(f"Padrão: {name}")
+        candidates = detect(
+            repo, client, limit=limit, min_score=min_score, pattern=detector
+        )
+        out[name] = candidates
+    return out
+
+
+def _print_pattern_summary(
+    pattern_name: str,
+    candidates: list[CommitCandidate],
+    json_path: Path,
+    md_path: Path,
+) -> None:
     occurrences = sum(len(c.matches) for c in candidates)
     files_touched = len({m.file_path for c in candidates for m in c.matches})
     perfect = sum(1 for c in candidates if round(c.score, 2) == 1.0)
     high = sum(1 for c in candidates if c.confidence == "high")
 
-    print()
-    banner("Resultado")
-    print(f"Tempo total:                 {elapsed:.1f} segundos")
+    print(f"--- {pattern_name} ---")
     print(f"Commits flagrados:           {len(candidates)}")
     print(f"Pontos no código (matches):  {occurrences}")
     print(f"Arquivos diferentes:         {files_touched}")
@@ -220,14 +318,13 @@ def main() -> int:
     print()
     print(f"Relatório legível:  {md_path}")
     print(f"JSON detalhado:     {json_path}")
-    print()
     if candidates:
+        print()
         print("Top 3 candidatos:")
         for c in candidates[:3]:
             msg = c.commit.message.splitlines()[0][:70] if c.commit.message else ""
             print(f"  {c.score:.2f} {c.confidence:6s}  {c.commit.sha[:10]}  {msg}")
-        print()
-    return 0
+    print()
 
 
 if __name__ == "__main__":

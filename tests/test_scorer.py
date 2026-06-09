@@ -1,11 +1,16 @@
-"""Tests for the scorer: weight math and confidence thresholds."""
+"""Tests for the missNullCheckP scorer: weight math and confidence thresholds."""
 from __future__ import annotations
 
 import pytest
 
-from src import config
-from src.models import Evidence, NullCheckKind
-from src.scorer import confidence_level, score
+from src.models import NullCheckKind
+from src.patterns import miss_null_check_p as config
+from src.patterns.miss_null_check_p import MissNullCheckPDetector, NullCheckEvidence
+
+_DETECTOR = MissNullCheckPDetector()
+score = _DETECTOR.score
+confidence_level = _DETECTOR.confidence_level
+Evidence = NullCheckEvidence
 
 
 def _ev(

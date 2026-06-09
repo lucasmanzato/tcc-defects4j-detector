@@ -25,10 +25,14 @@ load_dotenv()
 from src import config  # noqa: E402
 from src.baseline import baseline_classify  # noqa: E402
 from src.evaluation import Metrics, evaluate, render_report  # noqa: E402
-from src.features import extract_evidence  # noqa: E402
 from src.github_client import GitHubClient  # noqa: E402
 from src.models import CommitCandidate  # noqa: E402
-from src.scorer import confidence_level, score  # noqa: E402
+from src.patterns.miss_null_check_p import MissNullCheckPDetector  # noqa: E402
+
+_DETECTOR = MissNullCheckPDetector()
+extract_evidence = _DETECTOR.extract_evidence
+score = _DETECTOR.score
+confidence_level = _DETECTOR.confidence_level
 
 
 def parse_args() -> argparse.Namespace:

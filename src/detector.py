@@ -1,16 +1,24 @@
-"""Pipeline orchestration: turn a repo into a ranked list of candidates."""
+"""Pipeline orchestration: turn a repo into a ranked list of candidates.
+
+The detector is *pattern-agnostic*: it accepts any :class:`PatternDetector`
+and delegates evidence extraction, scoring, and match finding to it. New
+patterns plug in by registering themselves in :mod:`src.patterns`.
+"""
 from __future__ import annotations
 
 from typing import Iterable
 
 from . import config
-from .features import extract_evidence, find_matches
 from .github_client import GitHubClient
 from .logger import get_logger
 from .models import Commit, CommitCandidate
-from .scorer import confidence_level, score
+from .patterns import PatternDetector, get_detector
+from .patterns.miss_null_check_p import MissNullCheckPDetector
 
 log = get_logger()
+
+# Default detector preserved for backward compatibility with v0.1/v0.2 callers.
+_DEFAULT_DETECTOR: PatternDetector = MissNullCheckPDetector()
 
 
 def detect(
@@ -18,29 +26,42 @@ def detect(
     client: GitHubClient,
     limit: int | None = None,
     min_score: float = config.DEFAULT_MIN_SCORE,
+    pattern: PatternDetector | str | None = None,
 ) -> list[CommitCandidate]:
     """Walk a repo's commit history and return candidates above ``min_score``.
 
-    Results are sorted by descending score, then by descending commit date so
-    ties favour the most recent fix.
+    ``pattern`` accepts either a :class:`PatternDetector` instance, a name
+    string (e.g. ``"missNullCheckP"``), or ``None`` (uses
+    ``missNullCheckP`` for backward compatibility).
     """
-    return rank(client.list_commits(repo, limit=limit), min_score=min_score)
+    detector = _resolve_pattern(pattern)
+    return rank(
+        client.list_commits(repo, limit=limit),
+        detector=detector,
+        min_score=min_score,
+    )
 
 
-def rank(commits: Iterable[Commit], min_score: float) -> list[CommitCandidate]:
-    """Score each commit and keep those above the threshold, sorted desc."""
+def rank(
+    commits: Iterable[Commit],
+    detector: PatternDetector | str | None = None,
+    min_score: float = config.DEFAULT_MIN_SCORE,
+) -> list[CommitCandidate]:
+    """Score each commit with ``detector`` and keep those above the threshold."""
+    detector = _resolve_pattern(detector)
     candidates: list[CommitCandidate] = []
     inspected = 0
     notified_start = False
     for commit in commits:
         if not notified_start:
             log.info(
-                f"Comparando assinatura estrutural · limite mínimo {min_score}"
+                f"Comparando assinatura estrutural · padrão {detector.name} · "
+                f"limite mínimo {min_score}"
             )
             notified_start = True
         inspected += 1
-        evidence = extract_evidence(commit)
-        s = score(evidence)
+        evidence = detector.extract_evidence(commit)
+        s = detector.score(evidence)
         if inspected % 25 == 0:
             log.info(
                 f"Progresso: {inspected} commits analisados · "
@@ -48,7 +69,7 @@ def rank(commits: Iterable[Commit], min_score: float) -> list[CommitCandidate]:
             )
         if s < min_score:
             continue
-        matches = find_matches(commit)
+        matches = detector.find_matches(commit)
         log.info(
             f"Candidato: {commit.sha[:10]} score={s:.2f} "
             f"({len(matches)} match{'es' if len(matches) != 1 else ''}) — "
@@ -58,7 +79,7 @@ def rank(commits: Iterable[Commit], min_score: float) -> list[CommitCandidate]:
             CommitCandidate(
                 commit=commit,
                 score=s,
-                confidence=confidence_level(s, evidence),
+                confidence=detector.confidence_level(s, evidence),
                 evidence=evidence,
                 matches=matches,
             )
@@ -69,3 +90,11 @@ def rank(commits: Iterable[Commit], min_score: float) -> list[CommitCandidate]:
         f"{len(candidates)} flagrados"
     )
     return candidates
+
+
+def _resolve_pattern(value: PatternDetector | str | None) -> PatternDetector:
+    if value is None:
+        return _DEFAULT_DETECTOR
+    if isinstance(value, str):
+        return get_detector(value)
+    return value

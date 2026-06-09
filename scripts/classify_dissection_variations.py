@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.diff_parser import parse_unified_diff  # noqa: E402
-from src.features import detect_null_check  # noqa: E402
 from src.models import NullCheckKind  # noqa: E402
+from src.patterns.miss_null_check_p import detect_null_check  # noqa: E402
 
 PATTERN = "missNullCheckP"
 BASE_URL = "https://program-repair.org/defects4j-dissection/#!/bug"

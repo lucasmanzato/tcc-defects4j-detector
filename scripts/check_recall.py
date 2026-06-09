@@ -26,14 +26,19 @@ load_dotenv()
 
 from src import config  # noqa: E402
 from src.baseline import baseline_classify  # noqa: E402
-from src.features import extract_evidence  # noqa: E402
 from src.github_client import GitHubClient, GitHubError  # noqa: E402
-from src.scorer import confidence_level, score  # noqa: E402
+from src.patterns import available_patterns, get_detector  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run a targeted recall test on the ground truth.")
     p.add_argument("--ground-truth", type=Path, default=Path("data/defects4j_ground_truth.json"))
+    p.add_argument(
+        "--pattern",
+        default="missNullCheckP",
+        choices=available_patterns(),
+        help="Which pattern detector to validate.",
+    )
     p.add_argument("--min-score", type=float, default=config.DEFAULT_MIN_SCORE)
     p.add_argument("--output", type=Path, default=None, help="Optional Markdown output path")
     return p.parse_args()
@@ -47,6 +52,7 @@ def main() -> int:
         return 2
     truth = json.loads(args.ground_truth.read_text(encoding="utf-8"))
     client = GitHubClient(token=token)
+    detector = get_detector(args.pattern)
 
     rows: list[dict] = []
     missing: list[dict] = []
@@ -58,9 +64,9 @@ def main() -> int:
         except GitHubError as exc:
             missing.append({**entry, "error": str(exc).split(":", 2)[-1].strip()[:120]})
             continue
-        evidence = extract_evidence(commit)
-        s = score(evidence)
-        confidence = confidence_level(s, evidence)
+        evidence = detector.extract_evidence(commit)
+        s = detector.score(evidence)
+        confidence = detector.confidence_level(s, evidence)
         detector_hit = s >= args.min_score
         baseline_hit = baseline_classify(commit)
         if detector_hit:
@@ -74,7 +80,7 @@ def main() -> int:
                 "sha": commit.sha[:10],
                 "score": s,
                 "confidence": confidence,
-                "construct": evidence.null_check_construct.value,
+                "construct": _construct_label(evidence),
                 "var_used_before": evidence.var_was_used_before,
                 "bugfix_msg": evidence.is_likely_bugfix,
                 "detector_hit": detector_hit,
@@ -95,6 +101,15 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     print(report)
     return 0
+
+
+def _construct_label(evidence) -> str:
+    """Return the human-readable form for whichever construct field exists."""
+    for attr in ("null_check_construct", "cond_return_form"):
+        value = getattr(evidence, attr, None)
+        if value is not None:
+            return value.value if hasattr(value, "value") else str(value)
+    return "n/a"
 
 
 def _render(

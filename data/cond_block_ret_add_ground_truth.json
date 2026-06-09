@@ -1,0 +1,786 @@
+[
+  {
+    "project": "Closure",
+    "bug_id": 1,
+    "fix_commit_sha": "1dfad5043a207e032a78ef50c3cba50488bcd300",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 3,
+    "fix_commit_sha": "d80fcc04239ab8c4cf781273c4f9bc54cf06f479",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 5,
+    "fix_commit_sha": "59eec92e364b2ec2cec9dd63449f5c0134983f18",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 7,
+    "fix_commit_sha": "e736b1c92981fafdc87f3f41f66918305f173734",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "expLogicReduce",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 12,
+    "fix_commit_sha": "d06ac163013a3779fcec7c2f544ba99d08f69f58",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 15,
+    "fix_commit_sha": "968b3f467f51c6bfec18af1fbcf980a0f19a1fb3",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 17,
+    "fix_commit_sha": "33ab4df84afbdb36216b8a1ea3a526c438615e26",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "missNullCheckN"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 26,
+    "fix_commit_sha": "372eb11e44b8559004bfe78a5b4003caf0072135",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 29,
+    "fix_commit_sha": "6924915efab89f921fd0779fe200fecc1bf80847",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 30,
+    "fix_commit_sha": "38e2b8f247423734adec3dbd76fa22da1a3561a8",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "expLogicReduce",
+      "initFix",
+      "missNullCheckP",
+      "wrapsIfElse",
+      "wrongMethodRef"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 33,
+    "fix_commit_sha": "382422adae8e9f07fc23c94089c0ebe08a2174bc",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 36,
+    "fix_commit_sha": "be397ee0d0be2aad8f71d12f097b17563866445a",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "missNullCheckN"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 42,
+    "fix_commit_sha": "fb01427a445ebfeb3af5e220a98ccaced339b73e",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 60,
+    "fix_commit_sha": "fbaadc736f0031dd84bebea33abae497b47158cb",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "wrapsIf"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 61,
+    "fix_commit_sha": "34e4616a924bf272c076039e143e20f1d792731e",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 74,
+    "fix_commit_sha": "03fee32a06ccf8257b2da67b9034270be38805ae",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "copyPaste",
+      "missComp",
+      "wrongMethodRef"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 75,
+    "fix_commit_sha": "c6cc58a9bc617483366141386e047b085b4e83ff",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "constChange",
+      "wrongVarRef"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 76,
+    "fix_commit_sha": "78b01c3a435cd175ce3ee70f97b2f8faac342cdc",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missComp",
+      "missNullCheckN",
+      "unwrapIfElse"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 84,
+    "fix_commit_sha": "4839e1ea57f9a1a26debd2cc8f22beef7282b490",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 87,
+    "fix_commit_sha": "f64a3f51bd346547ce6e1edb30601df73dff27d9",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 88,
+    "fix_commit_sha": "6a17da87f9e132bdc147b33223826da040c77a6b",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 91,
+    "fix_commit_sha": "7eb2d84de101a125d41d3a1157f4eed789ca4a0d",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 94,
+    "fix_commit_sha": "7cc748592670105f9d783b1b85f0f27e938db4ff",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "expLogicExpand"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 98,
+    "fix_commit_sha": "d1df970451b5a18956448097b3afb43f3a82263d",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missComp",
+      "missNullCheckN"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 100,
+    "fix_commit_sha": "6d00ac1a68612aade8a19d7ecc9b180f00ae5234",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "missNullCheckN",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 106,
+    "fix_commit_sha": "e609670bb56e0c7216c9476a5f6a5594e7f1acdb",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "missNullCheckN",
+      "unwrapIfElse"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 109,
+    "fix_commit_sha": "7d26b7bcae8311f3c032bae3f1df27b590a4c174",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "wrapsIfElse",
+      "wrongComp",
+      "wrongMethodRef"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 116,
+    "fix_commit_sha": "b80dfd3b0e5e4b490b7afb469320d18bac4520b4",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 120,
+    "fix_commit_sha": "0123fd5303c85d0d26add64aa2e19fee33f73aaa",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 127,
+    "fix_commit_sha": "211dc0161ae737f59cac22f30b048d56a059d14b",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "expLogicExpand",
+      "missComp",
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Closure",
+    "bug_id": 128,
+    "fix_commit_sha": "d82fb38b0121bf690cea58df293185c7e91ded9c",
+    "github_repo": "google/closure-compiler",
+    "patterns": [
+      "condBlockRetAdd",
+      "expLogicMod"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 5,
+    "fix_commit_sha": "75944e541d358d5b06ebbba3098a919fbf2539d4",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockExcAdd",
+      "condBlockRetAdd",
+      "wrapsIfElse"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 13,
+    "fix_commit_sha": "bd59a1908a1df3364918be7b07782500616b15ac",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockExcAdd",
+      "condBlockRetAdd",
+      "initFix",
+      "wrapsTryCatch"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 19,
+    "fix_commit_sha": "0b3a8a3128890f710700d04e38df48b883d11d91",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockRetAdd",
+      "constChange",
+      "expArithMod",
+      "expLogicMod",
+      "wrapsIfElse"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 22,
+    "fix_commit_sha": "0b2b82ad923b0455cde93286e3f504a1abd0863b",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockExcAdd",
+      "condBlockRetAdd",
+      "expLogicMod",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 23,
+    "fix_commit_sha": "46356183872f2cba5e340993c6d85597a4f3cdbb",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockRetAdd",
+      "fixAPI",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 30,
+    "fix_commit_sha": "19b6372018c6b800f8e2bf1b85e15ef4cbd500da",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "copyPaste",
+      "expLogicExpand",
+      "expLogicMod",
+      "missComp",
+      "wrapsIf",
+      "wrapsIfElse"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 31,
+    "fix_commit_sha": "38bf7048571f3bc8dd34d14691906426444e4381",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockRetAdd",
+      "missComp",
+      "wrapsIfElse"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 36,
+    "fix_commit_sha": "da0612b348fcfa7679b92a5e9b8e1603e8e2da3a",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockRetAdd",
+      "expLogicExpand"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 40,
+    "fix_commit_sha": "8b1a8e178abb46cc048a3982636b8ec4e6ffc8dc",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockRetAdd",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 49,
+    "fix_commit_sha": "0ac772a4e3b07287c435fdc3c812f67277c85cc8",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 54,
+    "fix_commit_sha": "e89e8d62b911340cc5b293465cdae909f3dfd640",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 64,
+    "fix_commit_sha": "8de71ae52958ae70fe651b7327319c9beecd9b84",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockExcAdd",
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Lang",
+    "bug_id": 65,
+    "fix_commit_sha": "bb1671667d9085fb76bd06af7f7ad91d2c1c8389",
+    "github_repo": "apache/commons-lang",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missComp",
+      "wrapsIf"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 3,
+    "fix_commit_sha": "92c4697300e8ddf06152bc0838c738d50673c1d2",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 4,
+    "fix_commit_sha": "277e61721f34be16a20da663fd597edf6b51939b",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockRetAdd",
+      "copyPaste",
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 37,
+    "fix_commit_sha": "65ed08e15af15617e967d3ea9d635dc55a0ef866",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockRetAdd",
+      "copyPaste",
+      "expLogicExpand",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 53,
+    "fix_commit_sha": "7707b0bb80be05bbf6533a36bb0c646cbfd1026d",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 55,
+    "fix_commit_sha": "0c38504ffa3ef520ce78e260538d7b8742c895e8",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockRetAdd",
+      "expArithMod",
+      "initFix",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 60,
+    "fix_commit_sha": "9054aac4b948117b838d6a5b15be1f50965d805a",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "blockRemove",
+      "condBlockRem",
+      "condBlockRetAdd",
+      "unwrapTryCatch"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 64,
+    "fix_commit_sha": "7dadc2ab019f066a7a287376ad4c63193e8a0a9a",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "blockRemove",
+      "codeMove",
+      "condBlockOthersAdd",
+      "condBlockRem",
+      "condBlockRetAdd",
+      "expArithMod",
+      "missNullCheckN",
+      "wrongComp",
+      "wrongVarRef"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 68,
+    "fix_commit_sha": "615ca9a000c253575e6f62bed87db6110b750834",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockRetAdd",
+      "missNullCheckN",
+      "wrapsIfElse"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 84,
+    "fix_commit_sha": "317793eeff84dc9b260301adbe4aa8f5c79f703a",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 92,
+    "fix_commit_sha": "85a8ab2dcfc26e83be1514acdb11d3feaac3e73d",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "blockRemove",
+      "condBlockExcAdd",
+      "condBlockOthersAdd",
+      "condBlockRem",
+      "condBlockRetAdd",
+      "expArithMod",
+      "missComp",
+      "wrongMethodRef"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 93,
+    "fix_commit_sha": "7cd3d822b65b7acdd1f6e1c82b291cd994f4fe05",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockExcAdd",
+      "condBlockRetAdd",
+      "expLogicMod",
+      "missComp",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 103,
+    "fix_commit_sha": "4ce05bcd51ec956d789d20b59c743603d24a8ab7",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockExcAdd",
+      "condBlockRetAdd",
+      "wrapsTryCatch",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Math",
+    "bug_id": 106,
+    "fix_commit_sha": "41ba9e00e3bbde990f6821f67f0da2a5575b9ac3",
+    "github_repo": "apache/commons-math",
+    "patterns": [
+      "condBlockRetAdd",
+      "copyPaste"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 4,
+    "fix_commit_sha": "42b391d4209024292b6101048389570e4ec36b2a",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "condBlockRetAdd",
+      "copyPaste",
+      "missNullCheckP",
+      "wrapsMethod"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 9,
+    "fix_commit_sha": "31f908029b8cd9b1f32bed3a41651b30ebb47b9f",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 11,
+    "fix_commit_sha": "1802cf79c482f2df29abb3d6735bcf0b16cedb7d",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "condBlockRetAdd",
+      "wrapsIfElse"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 18,
+    "fix_commit_sha": "8ceb04ad7317d8db24476b3b5f56ec9f658bc43a",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 19,
+    "fix_commit_sha": "110ffa80070bf54ab8efabdaaa27b193a93d6128",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 21,
+    "fix_commit_sha": "8912aa176ea8414c2fc57df0d9b030b918630e9f",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 22,
+    "fix_commit_sha": "d0c872e4b0837aef1e1635bf5f15d33c3d8d9698",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "condBlockRetAdd"
+    ]
+  },
+  {
+    "project": "Mockito",
+    "bug_id": 33,
+    "fix_commit_sha": "5cb37751c0aba81d025dc5fe4f2f9a3bf86cc958",
+    "github_repo": "mockito/mockito",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missNullCheckN",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Time",
+    "bug_id": 2,
+    "fix_commit_sha": "8612f9e5b88c1bea933ef9ab1e431f5db3006b48",
+    "github_repo": "JodaOrg/joda-time",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "expLogicReduce",
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Time",
+    "bug_id": 12,
+    "fix_commit_sha": "77a6b3a44da7ae4af62e88b4b27eeefec2d768c2",
+    "github_repo": "JodaOrg/joda-time",
+    "patterns": [
+      "condBlockRetAdd",
+      "copyPaste",
+      "missComp",
+      "wrapsIfElse"
+    ]
+  },
+  {
+    "project": "Time",
+    "bug_id": 14,
+    "fix_commit_sha": "2ea856328ed5710537778d755a5ff52a6831a2ee",
+    "github_repo": "JodaOrg/joda-time",
+    "patterns": [
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  },
+  {
+    "project": "Time",
+    "bug_id": 17,
+    "fix_commit_sha": "a8913f5ad5dfde59263c981c9e9eb28e43fd2e00",
+    "github_repo": "JodaOrg/joda-time",
+    "patterns": [
+      "condBlockRetAdd",
+      "expArithMod",
+      "expLogicMod",
+      "missComp",
+      "unwrapMethod",
+      "wrongComp"
+    ]
+  },
+  {
+    "project": "Time",
+    "bug_id": 20,
+    "fix_commit_sha": "a92450e88df85d6b7a0fa53517da46286c24f53f",
+    "github_repo": "JodaOrg/joda-time",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missNullCheckN",
+      "missNullCheckP"
+    ]
+  },
+  {
+    "project": "Time",
+    "bug_id": 25,
+    "fix_commit_sha": "552be4b677ec30a34d04d234395ba1a8c7beaacf",
+    "github_repo": "JodaOrg/joda-time",
+    "patterns": [
+      "condBlockOthersAdd",
+      "condBlockRetAdd",
+      "missComp"
+    ]
+  }
+]
