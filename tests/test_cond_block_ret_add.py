@@ -167,6 +167,9 @@ def _evidence(form: CondReturnKind = CondReturnKind.RETURN_VALUE, **fields) -> C
         is_likely_bugfix=False,
         diff_size_lines=4,
         touches_test_files_only=False,
+        is_instanceof_guard=False,
+        is_authorization_guard=False,
+        match_count=1,
     )
     defaults.update(fields)
     return CondReturnEvidence(**defaults)
@@ -205,6 +208,120 @@ def test_score_does_not_apply_new_method_penalty():
     with_penalty_field = _evidence(adds_new_method_declaration=True)
     without = _evidence(adds_new_method_declaration=False)
     assert _DETECTOR.score(with_penalty_field) == _DETECTOR.score(without)
+
+
+# --- v0.3.1 false-positive filters ------------------------------------------
+def test_instanceof_guard_drops_below_threshold():
+    """Java 21 ``if (!(x instanceof Type t)) return;`` is a language idiom,
+    not a bug fix — penalty must take a baseline candidate below 0.7."""
+    ev = _evidence(is_instanceof_guard=True)
+    assert _DETECTOR.score(ev) < 0.7
+
+
+def test_authorization_guard_drops_below_threshold():
+    """``if (!hasPermission(...)) return`` is intentional access control."""
+    ev = _evidence(is_authorization_guard=True)
+    assert _DETECTOR.score(ev) < 0.7
+
+
+def test_large_refactor_drops_below_threshold():
+    """Many matches + large diff = refactor noise (e.g. Java 21 migration)."""
+    ev = _evidence(match_count=20, diff_size_lines=2000)
+    assert _DETECTOR.score(ev) < 0.7
+
+
+def test_large_refactor_threshold_requires_both_conditions():
+    """Just many matches (small diff) or just large diff (few matches) is
+    not enough — only the combination triggers the penalty."""
+    many_matches_only = _evidence(match_count=20, diff_size_lines=50)
+    large_diff_only = _evidence(match_count=1, diff_size_lines=500)
+    base = _evidence()
+    assert _DETECTOR.score(many_matches_only) == _DETECTOR.score(base)
+    assert _DETECTOR.score(large_diff_only) == _DETECTOR.score(base)
+
+
+def test_fp_penalties_do_not_affect_clean_candidates():
+    """A fix with no instanceof / no auth / small diff stays at its score."""
+    base = _evidence()
+    full = _evidence(
+        fix_replaces_existing_use=True,
+        var_was_used_before=True,
+        is_likely_bugfix=True,
+    )
+    assert _DETECTOR.score(base) >= 0.7
+    assert _DETECTOR.score(full) == pytest.approx(1.0)
+
+
+# --- extract_evidence detects FP categories from condition text -------------
+def test_extract_evidence_detects_java21_pattern_matching():
+    """Java 21 ``instanceof Type variable`` triggers the penalty."""
+    fd = _java(
+        added=("if (!(o instanceof UpstreamCause uc)) return false;",),
+    )
+    commit = _commit("Migrate to Java 21", (fd,))
+    ev = _DETECTOR.extract_evidence(commit)
+    assert ev.is_instanceof_guard is True
+
+
+def test_extract_evidence_does_not_flag_classic_instanceof():
+    """Classic ``o instanceof Type`` (no bound variable) is the canonical
+    equals() implementation form — must NOT be penalised."""
+    fd = _java(
+        added=(
+            "public boolean equals(Object o) {",
+            "if (o instanceof DelegatingMethod) {",
+            "return method.equals(((DelegatingMethod) o).method);",
+            "}",
+        ),
+    )
+    commit = _commit("Implement equals", (fd,))
+    ev = _DETECTOR.extract_evidence(commit)
+    assert ev.is_instanceof_guard is False
+
+
+def test_extract_evidence_detects_authorization_in_condition():
+    fd = _java(
+        added=("if (!target.hasPermission(Job.DELETE)) { return null; }",),
+    )
+    commit = _commit("UI menu", (fd,))
+    ev = _DETECTOR.extract_evidence(commit)
+    assert ev.is_authorization_guard is True
+
+
+def test_extract_evidence_detects_feature_flag_in_condition():
+    fd = _java(
+        added=("if (!flag.getFlagValue()) return null;",),
+    )
+    commit = _commit("Experimental UI", (fd,))
+    ev = _DETECTOR.extract_evidence(commit)
+    assert ev.is_authorization_guard is True
+
+
+def test_extract_evidence_counts_matches():
+    fd = _java(
+        added=(
+            "if (x == null) return;",
+            "if (y > 0) return null;",
+            "if (z.isEmpty()) return defaults;",
+        ),
+    )
+    commit = _commit("fix", (fd,))
+    ev = _DETECTOR.extract_evidence(commit)
+    assert ev.match_count == 3
+
+
+def test_extract_evidence_does_not_flag_legitimate_fix():
+    """Real fix (no instanceof, no auth) should leave new fields off."""
+    fd = _java(
+        added=("if (cause == null) return null;",),
+        context=("CauseAction cause = action.getAction(CauseAction.class);",),
+    )
+    commit = _commit("Fix NPE in cause lookup", (fd,))
+    ev = _DETECTOR.extract_evidence(commit)
+    assert ev.is_instanceof_guard is False
+    assert ev.is_authorization_guard is False
+    assert ev.match_count == 1
+    assert _DETECTOR.score(ev) >= 0.7
 
 
 # --- end-to-end: extract evidence + find matches ----------------------------

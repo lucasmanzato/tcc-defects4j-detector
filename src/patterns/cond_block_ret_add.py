@@ -52,6 +52,18 @@ W_CONDITION_VAR_USED_BEFORE = 0.05  # weak positive
 W_BUGFIX_MESSAGE = 0.05             # weak descriptive
 # PENALTY_ADDS_NEW_METHOD intentionally omitted — see comment above.
 
+# v0.3.1: extra penalties calibrated from manual FP inspection on
+# jenkinsci/jenkins. The three categories are detected through cheap token
+# matches on the extracted condition text.
+PENALTY_INSTANCEOF_GUARD = 0.20     # Java 21 pattern matching idiom
+PENALTY_AUTHORIZATION_GUARD = 0.20  # permission / feature-flag guards
+PENALTY_LARGE_REFACTOR = 0.15       # many matches + large diff = refactor noise
+# Thresholds for the "large refactor" penalty. Calibrated to leave real
+# fixes (typically 1-3 matches, <50 lines changed) untouched while
+# catching commits like "Migrate to Java 21" (23 matches, 2089 lines).
+LARGE_REFACTOR_MATCH_COUNT = 5
+LARGE_REFACTOR_DIFF_LINES = 200
+
 DEFAULT_MIN_SCORE = config.DEFAULT_MIN_SCORE
 SCORE_LOW_MAX = config.SCORE_LOW_MAX
 SCORE_MEDIUM_MAX = config.SCORE_MEDIUM_MAX
@@ -82,6 +94,39 @@ _TRAILING_BRACE = re.compile(r"\)\s*\{?\s*$")
 # ``return <expr>;`` standalone (for multi-line blocks).
 _RETURN_LINE = re.compile(r"^\s*return\b\s*(?P<val>[^;]*?)\s*;\s*$")
 
+# --- v0.3.1 FP filters --------------------------------------------------------
+# Three categories of false positives surfaced during manual inspection of
+# the detector's output on jenkinsci/jenkins:
+#
+#   1. Java 21 pattern matching: ``if (!(x instanceof Type t)) return ...;``
+#      is a language idiom for type narrowing, not a bug fix.
+#   2. Permission / authorisation guards: ``if (!hasPermission(...)) return``
+#      is a deliberate access-control pattern.
+#   3. Feature flag guards: ``if (!flag.getValue()) return`` is an
+#      experimental-feature gating pattern.
+#
+# Each is detected by matching tokens inside the condition expression
+# (extracted by the balanced-paren scanner). When any match in the commit
+# falls in one of these categories, the corresponding penalty is subtracted
+# from the score.
+
+# Restrict the penalty to Java 21 *pattern matching* syntax:
+# ``instanceof Type variable`` (two identifiers after the keyword). The
+# classic form ``o instanceof Type`` used in equals() implementations is
+# deliberately NOT penalised because it is a legitimate fix shape.
+_INSTANCEOF_RE = re.compile(r"\binstanceof\s+[A-Z]\w*\s+\w+\b")
+_AUTHORIZATION_RE = re.compile(
+    r"\b("
+    r"hasPermission|checkPermission|getPermission"
+    r"|isAuthorized|isAuthenticated"
+    r"|isAdministrator|isAdmin|isUserAdmin"
+    r"|hasAccess|canAccess|allowedTo"
+    r"|getFlagValue|isEnabled|isFeatureEnabled|isFeatureOn|isToggleOn"
+    r"|FeatureFlag|FeatureToggle"
+    r")\b",
+    re.IGNORECASE,
+)
+
 # Identifier extraction from a condition expression — used to test whether
 # the variables involved already existed in the surrounding code.
 _IDENT = re.compile(r"\b([A-Za-z_]\w*)\b")
@@ -111,10 +156,17 @@ _NEW_TYPE_DECL = re.compile(
 # ============================================================================
 @dataclass(frozen=True, kw_only=True)
 class CondReturnEvidence(BaseEvidence):
-    """Evidences specific to ``condBlockRetAdd``."""
+    """Evidences specific to ``condBlockRetAdd``.
+
+    The last three fields are v0.3.1 false-positive filters introduced
+    after manual inspection of detector output on real repositories.
+    """
 
     has_guard_added: bool
     cond_return_form: CondReturnKind
+    is_instanceof_guard: bool          # condition uses Java ``instanceof``
+    is_authorization_guard: bool        # condition contains permission/flag tokens
+    match_count: int                    # how many individual guards fire in this commit
 
 
 # ============================================================================
@@ -149,8 +201,13 @@ def classify_line(line: str, *, neighbours: Sequence[str] = ()) -> CondReturnKin
     extra_neighbours_skipped = cond_end.neighbours_used
 
     # Compact form: same line (or final continuation line) contains the return.
+    # We accept both ``if (cond) return ...;`` and the brace-wrapped variant
+    # ``if (cond) { return ...; }`` when the whole thing fits on one line.
     tail = after.lstrip()
     if _RETURN_TOKEN.match(tail):
+        return CondReturnKind.COMPACT_ONE_LINE
+    inline_after_brace = tail.lstrip("{").lstrip()
+    if _RETURN_TOKEN.match(inline_after_brace):
         return CondReturnKind.COMPACT_ONE_LINE
 
     # Block opener: must look like ``if (cond) {`` or ``if (cond)`` with the
@@ -227,18 +284,42 @@ def _classify_return_value(value: str) -> CondReturnKind:
 
 def detect_cond_return_in_file(file_diff: FileDiff) -> CondReturnKind:
     """Return the strongest form fired by any added line in this file."""
+    for _, _, kind in _iter_guard_locations(file_diff):
+        if kind is not CondReturnKind.NONE:
+            return kind
+    return CondReturnKind.NONE
+
+
+def _iter_guard_locations(file_diff: FileDiff):
+    """Yield ``(line_number, text, kind)`` for every added line that fires a
+    guard. Shared by :func:`detect_cond_return_in_file` and the FP filters
+    so we never re-walk the same lines twice.
+    """
     lines = file_diff.added_with_lineno or tuple(
         (i + 1, line) for i, line in enumerate(file_diff.added_lines)
     )
-    best = CondReturnKind.NONE
-    for idx, (_, text) in enumerate(lines):
+    for idx, (lineno, text) in enumerate(lines):
         neighbours = tuple(t for _, t in lines[idx + 1 : idx + 6])
         kind = classify_line(text, neighbours=neighbours)
-        if kind is not CondReturnKind.NONE:
-            # Any concrete form is treated as "fired"; we don't need the
-            # strongest one for evidence purposes, just the first.
-            return kind
-    return best
+        if kind is CondReturnKind.NONE:
+            continue
+        yield lineno, text, kind
+
+
+def is_instanceof_guard_line(line: str, *, neighbours: Sequence[str] = ()) -> bool:
+    """True when the if-condition on this line uses ``instanceof``."""
+    cond = _extract_condition_text(line, neighbours=neighbours)
+    if cond is None:
+        return False
+    return bool(_INSTANCEOF_RE.search(cond))
+
+
+def is_authorization_guard_line(line: str, *, neighbours: Sequence[str] = ()) -> bool:
+    """True when the if-condition contains permission/flag-style tokens."""
+    cond = _extract_condition_text(line, neighbours=neighbours)
+    if cond is None:
+        return False
+    return bool(_AUTHORIZATION_RE.search(cond))
 
 
 def has_guard_added(files: Sequence[FileDiff]) -> bool:
@@ -321,12 +402,31 @@ class CondBlockRetAddDetector(PatternDetector):
         production_files = tuple(f for f in java_files if not _is_test_path(f.path))
         target_files = production_files
 
+        # Single walk over the target files: extracts the canonical form,
+        # counts matches, and flags FP categories simultaneously so we do
+        # not re-scan lines for each filter.
         form = CondReturnKind.NONE
+        match_count = 0
+        is_instanceof = False
+        is_auth = False
         for f in target_files:
-            file_form = detect_cond_return_in_file(f)
-            if file_form is not CondReturnKind.NONE:
-                form = file_form
-                break
+            lines = f.added_with_lineno or tuple(
+                (i + 1, line) for i, line in enumerate(f.added_lines)
+            )
+            for idx, (_, text) in enumerate(lines):
+                neighbours = tuple(t for _, t in lines[idx + 1 : idx + 6])
+                kind = classify_line(text, neighbours=neighbours)
+                if kind is CondReturnKind.NONE:
+                    continue
+                match_count += 1
+                if form is CondReturnKind.NONE:
+                    form = kind
+                cond_text = _extract_condition_text(text, neighbours=neighbours)
+                if cond_text:
+                    if _INSTANCEOF_RE.search(cond_text):
+                        is_instanceof = True
+                    if _AUTHORIZATION_RE.search(cond_text):
+                        is_auth = True
 
         guard_added = form is not CondReturnKind.NONE
         replaces_use = any(fix_replaces_existing_use(f) for f in target_files)
@@ -345,6 +445,9 @@ class CondBlockRetAddDetector(PatternDetector):
             is_likely_bugfix=bugfix,
             diff_size_lines=size,
             touches_test_files_only=tests_only,
+            is_instanceof_guard=is_instanceof,
+            is_authorization_guard=is_auth,
+            match_count=match_count,
         )
 
     def score(self, evidence: BaseEvidence) -> float:
@@ -366,6 +469,19 @@ class CondBlockRetAddDetector(PatternDetector):
         if evidence.is_likely_bugfix:
             total += W_BUGFIX_MESSAGE
         # No new-method penalty for condBlockRetAdd — see weights section.
+
+        # v0.3.1 FP filters: apply penalties for instanceof patterns,
+        # authorisation/flag guards, and large-refactor noise.
+        if evidence.is_instanceof_guard:
+            total -= PENALTY_INSTANCEOF_GUARD
+        if evidence.is_authorization_guard:
+            total -= PENALTY_AUTHORIZATION_GUARD
+        if (
+            evidence.match_count > LARGE_REFACTOR_MATCH_COUNT
+            and evidence.diff_size_lines > LARGE_REFACTOR_DIFF_LINES
+        ):
+            total -= PENALTY_LARGE_REFACTOR
+
         total = max(0.0, min(1.0, total))
         return round(total, 4)
 

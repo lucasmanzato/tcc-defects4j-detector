@@ -45,14 +45,7 @@ def candidate_to_dict(c: CommitCandidate) -> dict:
         "url": c.commit.url,
         "date": c.commit.date.isoformat(),
         "occurrences": len(c.matches),
-        "evidence": {
-            "has_null_check_added": c.evidence.has_null_check_added,
-            "null_check_construct": c.evidence.null_check_construct.value,
-            "var_was_used_before": c.evidence.var_was_used_before,
-            "is_likely_bugfix": c.evidence.is_likely_bugfix,
-            "diff_size_lines": c.evidence.diff_size_lines,
-            "touches_test_files_only": c.evidence.touches_test_files_only,
-        },
+        "evidence": _evidence_to_dict(c.evidence),
         "matches": [
             {
                 "file_path": m.file_path,
@@ -63,6 +56,19 @@ def candidate_to_dict(c: CommitCandidate) -> dict:
             for m in c.matches
         ],
     }
+
+
+def _evidence_to_dict(evidence: object) -> dict:
+    """Serialise any pattern-specific evidence dataclass into a JSON dict."""
+    out: dict = {}
+    fields = getattr(type(evidence), "__dataclass_fields__", {})
+    for name in fields:
+        value = getattr(evidence, name)
+        if hasattr(value, "value") and not isinstance(value, (bool, int, float)):
+            out[name] = value.value
+        else:
+            out[name] = value
+    return out
 
 
 def build_summary(candidates: list[CommitCandidate]) -> dict:
@@ -90,7 +96,13 @@ def main() -> int:
         return 2
     client = GitHubClient(token=token)
     print(f"detecting {args.pattern} in {args.repo} (min_score={args.min_score})...", file=sys.stderr)
-    candidates = detect(args.repo, client, limit=args.limit, min_score=args.min_score)
+    candidates = detect(
+        args.repo,
+        client,
+        limit=args.limit,
+        min_score=args.min_score,
+        pattern=args.pattern,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "repo": args.repo,

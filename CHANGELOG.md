@@ -8,6 +8,77 @@ métricas de cada estágio.
 
 ---
 
+## v0.3.1-fp-categories — Filtros de FP para `condBlockRetAdd` (2026-06-02)
+
+**Status:** funcional · recall 98% mantido no `condBlockRetAdd` · FPs no
+estudo de caso `jenkinsci/jenkins` reduzidos em ~56% nas ocorrências.
+
+### Motivação
+
+A v0.3.0 entregou o detector de `condBlockRetAdd` com 98% de recall no
+ground truth do Defects4J, mas inspeção manual de 20 candidatos
+flagrados em `jenkinsci/jenkins` revelou que **a máscara estrutural
+sozinha (`if + return`) coincide com vários idiomas legítimos do Java
+moderno**, gerando falsos positivos. Quatro categorias foram
+identificadas:
+
+1. **Java 21 pattern matching** — `if (!(x instanceof Type t)) return ...;`
+   é sintaxe de narrowing, não correção de bug.
+2. **Guards de permissão** — `if (!hasPermission(...)) return` é padrão
+   intencional de controle de acesso.
+3. **Guards de feature flag** — `if (!flag.getValue()) return` é
+   gating de feature experimental.
+4. **Refactors grandes** — commits como "Migrate to Java 21" tinham 23
+   matches num diff de 2089 linhas; cada match isolado parecia um guard,
+   mas o agregado é claramente refatoração de estilo.
+
+### Sinais novos
+
+| Campo na `CondReturnEvidence` | Penalidade | Como detecta |
+|---|---:|---|
+| `is_instanceof_guard` | −0,20 | regex `instanceof Type variable` (sintaxe Java 21 com binding) |
+| `is_authorization_guard` | −0,20 | regex com lista curta: `hasPermission`, `isAuthorized`, `isAdministrator`, `getFlagValue`, `isEnabled`, `isFeatureEnabled`, etc. |
+| `match_count` (campo) | −0,15 condicional | aplica quando `match_count > 5` E `diff_size_lines > 200` |
+
+### Refinamentos durante a calibração
+
+- A primeira versão do detector de `instanceof` usava `\binstanceof\b` e
+  derrubou Mockito 11 (recall 98% → 97%), porque um `equals()` clássico
+  usa `o instanceof Type` sem binding. Refinamos para
+  `instanceof\s+[A-Z]\w*\s+\w+` (exige Tipo + variável), que captura
+  apenas a sintaxe Java 21 e preserva Mockito 11 (recall de volta a 98%).
+- A penalidade do "refactor grande" usa o operador AND (não OR) das
+  duas condições para não penalisar commits pequenos com várias
+  matches (legítimos) nem commits grandes com pouca incidência.
+
+### Resultados no estudo de caso `jenkinsci/jenkins`
+
+| | v0.3.0 | v0.3.1 | Delta |
+|---|---:|---:|---:|
+| Commits flagrados | 20 | 16 | −20% |
+| Pontos no código (matches) | 88 | 39 | **−56%** |
+
+Os 4 FPs principais identificados na análise manual (Java 21 migration,
+App Bar UI, Experimental Run UI, Plugin Manager UI) foram todos
+filtrados. Os 7 fixes legítimos com mensagens claras de NPE/SECURITY
+permaneceram com score ≥ 0,85.
+
+### Métricas no ground truth
+
+| Padrão | Bugs alcançáveis | Recall v0.3.0 | Recall v0.3.1 |
+|---|---:|---:|---:|
+| `missNullCheckP` | 18 | 100% (18/18) | **100% (18/18)** |
+| `condBlockRetAdd` | 58 | 98% (57/58) | **98% (57/58)** |
+
+Trade-off de zero perda no ground truth com 56% menos ruído em
+repositórios reais — exatamente o resultado pretendido.
+
+### Testes
+
+71 → 94 (v0.3.0) → **105** (v0.3.1, +11 novos cobrindo os filtros).
+
+---
+
 ## v0.3.0-multi-pattern — Suporte a múltiplos padrões (2026-06-02)
 
 **Status:** em desenvolvimento · adiciona o padrão `condBlockRetAdd` ao lado
