@@ -19,7 +19,7 @@ def _ev(
     kind: NullCheckKind = NullCheckKind.GUARD_RETURN,
     replaces_use: bool = True,
     used_before: bool = True,
-    new_method: bool = False,
+    defensive_param: bool = False,
     bugfix: bool = True,
     size: int = 10,
     tests_only: bool = False,
@@ -29,7 +29,7 @@ def _ev(
         null_check_construct=kind,
         fix_replaces_existing_use=replaces_use,
         var_was_used_before=used_before,
-        adds_new_method_declaration=new_method,
+        is_defensive_param_check=defensive_param,
         is_likely_bugfix=bugfix,
         diff_size_lines=size,
         touches_test_files_only=tests_only,
@@ -72,16 +72,16 @@ def test_score_fix_replaces_use_adds_weight():
     assert s_with - s_without == pytest.approx(config.W_FIX_REPLACES_USE)
 
 
-def test_score_penalty_when_new_method_added():
-    """Adding a new method should subtract ``PENALTY_ADDS_NEW_METHOD``."""
+def test_score_penalty_when_defensive_param_check_detected():
+    """Defensive parameter check subtracts ``PENALTY_ADDS_NEW_METHOD``."""
     s_clean = score(_ev())                # all positives, no penalty
-    s_penalised = score(_ev(new_method=True))
+    s_penalised = score(_ev(defensive_param=True))
     assert s_clean - s_penalised == pytest.approx(config.PENALTY_ADDS_NEW_METHOD)
 
 
-def test_score_clamped_to_zero_when_only_new_method_signal():
-    """Adding a new method with only the eliminatory evidences must not go negative."""
-    s = score(_ev(replaces_use=False, used_before=False, bugfix=False, new_method=True))
+def test_score_clamped_to_zero_when_only_defensive_signal():
+    """Defensive param check with only the eliminatory evidences must not go negative."""
+    s = score(_ev(replaces_use=False, used_before=False, bugfix=False, defensive_param=True))
     expected = (
         config.W_NULL_CHECK_ADDED
         + config.W_CANONICAL_CONSTRUCT
@@ -91,16 +91,14 @@ def test_score_clamped_to_zero_when_only_new_method_signal():
     assert s >= 0.0
 
 
-def test_score_new_method_pushes_weak_candidate_below_threshold():
-    """A candidate that only has E1+E2+E4 falls below 0.7 once new method fires.
-
-    This is the exact scenario v0.2.0 is designed to remove: a commit that
-    adds a null check inside a brand-new method, has no replaced use, no
-    prior variable, but happens to have bugfix-style language in the
-    message.
+def test_score_defensive_param_pushes_weak_candidate_below_threshold():
+    """A candidate that only has E1+E2+E4 falls below 0.7 once the defensive
+    parameter check fires — the exact false-positive class v0.2.0 (now
+    refined by v0.3.2) is designed to remove: a new method with null guard
+    on its parameter and a bugfix-like commit message.
     """
     s = score(_ev(
-        replaces_use=False, used_before=False, bugfix=True, new_method=True,
+        replaces_use=False, used_before=False, bugfix=True, defensive_param=True,
     ))
     assert s < config.DEFAULT_MIN_SCORE
 

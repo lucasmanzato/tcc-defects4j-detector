@@ -8,6 +8,133 @@ métricas de cada estágio.
 
 ---
 
+## v0.3.2-defensive-param-check — Refinamento do filtro de "novo método" para `missNullCheckP` (2026-06-02)
+
+**Status:** funcional · recall 100% mantido · filtro mais específico
+(estrutural) com fundamentação em literatura acadêmica.
+
+### Motivação
+
+A penalidade `adds_new_method_declaration` introduzida na v0.2.0 mostrou-se
+ampla demais. Ela dispara em qualquer commit de **adição pura** (sem
+linhas removidas) que declare um método/classe novo — independentemente
+do que o null check protege. Inspeção manual revelou casos de **fixes
+legítimos** sendo filtrados:
+
+- Fixes que adicionam um método helper interno com null check em
+  variável local
+- Métodos que validam o retorno de uma chamada antes de usá-lo
+- Métodos que checam campos da classe (`this.cache`) antes de acessar
+
+Esses casos não são *defensive programming* no sentido clássico — são
+reparos de lógica de execução. O filtro genérico não fazia essa
+distinção.
+
+### Justificativa acadêmica
+
+Duas linhas da literatura suportam o refinamento implementado:
+
+**1. Defensive programming (Bertrand Meyer, 1992)** — *"Applying 'design
+by contract'"*, IEEE Computer 25(10). Meyer estabelece que a verificação
+de **preconditions nos parâmetros** de um método é responsabilidade do
+cliente, classificada como **decisão de design**, não como correção de
+falha.
+
+**2. Bug-fix patterns (Pan, Kim, Whitehead, 2009)** — *"Toward an
+understanding of bug fix patterns"*, Empirical Software Engineering
+14(3). Os autores distinguem explicitamente "adição de validação de
+parâmetros" de "correção de null check faltante", classificando-os como
+categorias separadas no catálogo de mudanças.
+
+**3. Defects4J Dissection (Sobreira et al., 2018)** — *"Dissection of a
+Bug Dataset: Anatomy of 395 Patches from Defects4J"*, SANER 2018. O
+catálogo de `missNullCheckP` descreve a correção como ocorrendo em
+**lógica existente**, não em validação de boundary de método novo.
+
+O critério distintivo é **sintaticamente observável**:
+
+| Padrão | Variável protegida | Classificação |
+|---|---|---|
+| Defensive programming | **Parâmetro** do método sendo declarado | Decisão de design (FP) |
+| `missNullCheckP` (fix) | Variável **local**, campo, ou retorno de chamada | Correção de bug |
+
+### O novo filtro
+
+Renomeado: `adds_new_method_declaration` → `is_defensive_param_check`.
+
+```
+is_defensive_param_check = True  se e somente se:
+  1. Arquivo é adição pura (zero linhas removidas), E
+  2. Arquivo declara ao menos um método/construtor novo, E
+  3. Pelo menos uma variável protegida pelo null check é
+     PARÂMETRO de algum desses métodos novos.
+```
+
+### Implementação
+
+- Novo regex `_METHOD_DECL_WITH_PARAMS` captura a lista de parâmetros
+- Função `_extract_param_names()` extrai nomes de parâmetros, tratando:
+  - Generics: `Map<String, Object> data` → `data`
+  - Annotations: `@NotNull String foo` → `foo`
+  - `final` modifier
+  - Varargs: `String... args` → `args`
+- Função `is_defensive_param_check()` substitui `adds_new_method_declaration`
+- `NullCheckEvidence` ganha o novo campo `is_defensive_param_check`
+- `BaseEvidence` perde `adds_new_method_declaration` (não é mais
+  transversal — `condBlockRetAdd` não usa este conceito)
+
+### Comportamento comparado
+
+| Cenário | v0.3.1 | v0.3.2 | Justificativa |
+|---|:---:|:---:|---|
+| `if (input == null) ...` em novo `void foo(Input input)` | filtra | filtra | `input` é param → defensive |
+| `Object data = cache.get(); if (data == null) ...` em novo helper | filtra | **passa** | `data` é local → fix interno |
+| `if (this.cache == null) initCache()` em novo método | filtra | **passa** | `this` não é param |
+| Override `equals(Object o) { if (o == null) ... }` | filtra | filtra | `o` é param → defensive |
+| Construtor `Foo(Bar bar) { if (bar == null) ... }` | filtra | filtra | `bar` é param → defensive |
+| Fix surgical (Lang 33) | passa | passa | filtro nem aplica |
+
+### Resultados medidos
+
+**Ground truth:**
+- `missNullCheckP`: **100% (18/18)** mantido ✓
+- `condBlockRetAdd`: **98% (55/56)** mantido ✓
+
+**Estudo de caso `google/error-prone` (500 commits, mesmo limite):**
+
+| | v0.2.0/v0.3.1 | v0.3.2 |
+|---|---:|---:|
+| Commits flagrados | 35 | **51** (+46%) |
+| Ocorrências | 56 | **97** (+73%) |
+
+A v0.3.2 é **mais permissiva** que a v0.2.0 — exatamente o que o desenho
+estrutural prevê. Os 16 commits adicionais são casos onde a `v0.2.0`
+descartava por excesso de generalização: pure-addition com método novo
+mas null check em variável local/campo (fixes internos legítimos).
+
+### Trade-off documentado
+
+| Aspecto | v0.2.0/v0.3.1 | v0.3.2 |
+|---|---|---|
+| Filtro genérico | sim | não — refinado por análise de parâmetros |
+| Falsos positivos filtrados | mais | menos |
+| Falsos negativos preservados | menos | **mais** |
+| Defensabilidade acadêmica | filtro estrutural genérico | **estrutural com fundamentação clássica** |
+| Recall no GT | 100% | 100% |
+
+Para o TCC, a v0.3.2 é a versão **mais defensável**: o critério é
+sintaticamente observável, fundamentado em literatura clássica de
+Engenharia de Software, e não mistura sinais textuais com estruturais.
+
+### Testes
+
+105 (v0.3.1) → **106** (v0.3.2). Testes da `adds_new_method_declaration`
+substituídos por testes equivalentes que validam o novo critério
+estrutural, incluindo casos de generics, annotations, final, varargs,
+construtores, overrides, e a distinção entre param vs. local var.
+
+---
+
 ## v0.3.1-fp-categories — Filtros de FP para `condBlockRetAdd` (2026-06-02)
 
 **Status:** funcional · recall 98% mantido no `condBlockRetAdd` · FPs no

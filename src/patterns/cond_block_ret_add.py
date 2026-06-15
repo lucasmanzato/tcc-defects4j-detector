@@ -440,8 +440,6 @@ class CondBlockRetAddDetector(PatternDetector):
             cond_return_form=form,
             fix_replaces_existing_use=replaces_use,
             var_was_used_before=var_used_before,
-            # Penalty disabled for this pattern (see weights section).
-            adds_new_method_declaration=False,
             is_likely_bugfix=bugfix,
             diff_size_lines=size,
             touches_test_files_only=tests_only,

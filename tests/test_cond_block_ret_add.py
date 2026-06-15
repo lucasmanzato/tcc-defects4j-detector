@@ -163,7 +163,6 @@ def _evidence(form: CondReturnKind = CondReturnKind.RETURN_VALUE, **fields) -> C
         cond_return_form=form,
         fix_replaces_existing_use=False,
         var_was_used_before=False,
-        adds_new_method_declaration=False,
         is_likely_bugfix=False,
         diff_size_lines=4,
         touches_test_files_only=False,
@@ -199,15 +198,6 @@ def test_score_full_evidence_reaches_one():
         is_likely_bugfix=True,
     )
     assert _DETECTOR.score(ev) == pytest.approx(1.0)
-
-
-def test_score_does_not_apply_new_method_penalty():
-    """condBlockRetAdd intentionally drops the new-method penalty from
-    missNullCheckP v0.2.0. Fixes that add a guard at the top of a freshly
-    declared override (Lang 23, Lang 64) must not be penalised."""
-    with_penalty_field = _evidence(adds_new_method_declaration=True)
-    without = _evidence(adds_new_method_declaration=False)
-    assert _DETECTOR.score(with_penalty_field) == _DETECTOR.score(without)
 
 
 # --- v0.3.1 false-positive filters ------------------------------------------

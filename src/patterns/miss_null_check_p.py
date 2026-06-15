@@ -63,16 +63,16 @@ _VAR_FROM_REQUIRE = re.compile(
     r"\brequireNonNull\s*\(\s*(\w+)|\bcheckNotNull\s*\(\s*(\w+)"
 )
 
-# Method/type declaration regexes (shared structural signal across patterns).
-_NEW_METHOD_DECL = re.compile(
+# Method declaration with a *captured* parameter list. The capture group
+# ``params`` carries the full text inside the parens so we can extract the
+# parameter names with :func:`_extract_param_names`.
+# Constructors look identical to methods to the parser (modifiers + name +
+# parens), so the same regex catches both.
+_METHOD_DECL_WITH_PARAMS = re.compile(
     r"\b(?:public|private|protected)\s+"
     r"(?:static\s+|final\s+|abstract\s+|synchronized\s+)*"
-    r"[\w<>\[\],\s?]+?\s+\w+\s*\([^)]*\)\s*(?:throws\s+[\w,\s]+)?\s*\{?"
-)
-_NEW_TYPE_DECL = re.compile(
-    r"\b(?:public|private|protected)\s+"
-    r"(?:static\s+|final\s+|abstract\s+)*"
-    r"(?:class|interface|enum|record)\s+\w+"
+    r"(?:[\w<>\[\],\s?]+?\s+)?\w+\s*\((?P<params>[^)]*)\)\s*"
+    r"(?:throws\s+[\w,\s]+)?\s*\{?"
 )
 
 
@@ -81,10 +81,20 @@ _NEW_TYPE_DECL = re.compile(
 # ============================================================================
 @dataclass(frozen=True, kw_only=True)
 class NullCheckEvidence(BaseEvidence):
-    """Evidences specific to ``missNullCheckP``."""
+    """Evidences specific to ``missNullCheckP``.
+
+    ``is_defensive_param_check`` replaces the v0.2.0/v0.3.1
+    ``adds_new_method_declaration`` filter. It is a refinement based on the
+    Defensive Programming literature (Meyer 1992, Pan et al. 2009): a null
+    check added in a freshly declared method, on a *parameter* of that
+    method, is canonical defensive coding rather than a bug fix. The same
+    pure-addition with a null check on a *local* variable, field, or method
+    return is treated as a legitimate fix (no penalty).
+    """
 
     has_null_check_added: bool
     null_check_construct: NullCheckKind
+    is_defensive_param_check: bool
 
 
 # ============================================================================
@@ -148,16 +158,65 @@ def fix_replaces_existing_use(file_diff: FileDiff) -> bool:
     return any(re.search(rf"\b{re.escape(v)}\b", removed_text) for v in candidates)
 
 
-def adds_new_method_declaration(file_diff: FileDiff) -> bool:
-    added_decls = _declarations_in(file_diff.added_lines)
-    if not added_decls:
-        return False
-    removed_decls = _declarations_in(file_diff.removed_lines)
-    if not (added_decls - removed_decls):
-        return False
+def is_defensive_param_check(file_diff: FileDiff) -> bool:
+    """True when the null check is a defensive-programming boundary guard.
+
+    Concretely: the file is a pure addition (no removed lines) AND it
+    declares a method whose parameter list contains the variable that the
+    null check protects. This is the canonical "Introduce Assertion" pattern
+    (Fowler, *Refactoring*) applied at the method boundary, classified by
+    Meyer (1992) as a precondition responsibility, not a fix.
+
+    Returns False — i.e. the file looks like a *real* fix — when:
+
+    - The file has any removed lines (it was modifying existing logic).
+    - It does not declare any method.
+    - The null-protected variable is NOT in the parameter list of any new
+      method (i.e. it is a local, field, or call result — handled inside
+      the method body, classified as a missing-null-check repair).
+    """
     if file_diff.removed_lines:
         return False
-    return True
+
+    new_method_params: set[str] = set()
+    for line in file_diff.added_lines:
+        for match in _METHOD_DECL_WITH_PARAMS.finditer(line):
+            new_method_params.update(_extract_param_names(match.group("params")))
+    if not new_method_params:
+        return False
+
+    protected = _variables_protected_by_null_check(file_diff.added_lines)
+    return any(name in new_method_params for name in protected)
+
+
+def _extract_param_names(params_text: str) -> set[str]:
+    """Return the set of parameter names declared inside a Java param list.
+
+    Handles the practical quirks of Java method signatures: generics
+    (``Map<String, Object> data``), annotations (``@NotNull String foo``),
+    ``final`` modifiers, and varargs (``String... args``). The strategy is
+    to strip these surface decorations, split on commas, and take the
+    rightmost identifier of each segment as the parameter name.
+    """
+    if not params_text or not params_text.strip():
+        return set()
+    # Strip generic argument lists first so commas inside them do not
+    # split parameters (``Map<String, Object> data`` would otherwise become
+    # ``Map<String`` and ``Object> data``).
+    cleaned = re.sub(r"<[^>]*>", "", params_text)
+    names: set[str] = set()
+    for piece in cleaned.split(","):
+        piece = piece.strip()
+        if not piece:
+            continue
+        # Strip annotations (``@NotNull(...)`` or ``@NotNull``).
+        piece = re.sub(r"@\w+(?:\([^)]*\))?\s*", "", piece)
+        # Strip leading ``final``.
+        piece = re.sub(r"^final\s+", "", piece)
+        tokens = re.findall(r"\b[A-Za-z_]\w*\b", piece)
+        if tokens:
+            names.add(tokens[-1])
+    return names
 
 
 def is_bugfix_message(message: str) -> bool:
@@ -200,7 +259,7 @@ class MissNullCheckPDetector(PatternDetector):
         null_check = construct is not NullCheckKind.NONE
         var_used_before = any(variable_used_before(f) for f in target_files)
         replaces_use = any(fix_replaces_existing_use(f) for f in target_files)
-        new_method = any(adds_new_method_declaration(f) for f in target_files)
+        defensive_param = any(is_defensive_param_check(f) for f in target_files)
         bugfix = is_bugfix_message(commit.message)
         size = diff_size_lines(commit.files)
         tests_only = touches_test_files_only(commit.files)
@@ -210,7 +269,7 @@ class MissNullCheckPDetector(PatternDetector):
             null_check_construct=construct,
             fix_replaces_existing_use=replaces_use,
             var_was_used_before=var_used_before,
-            adds_new_method_declaration=new_method,
+            is_defensive_param_check=defensive_param,
             is_likely_bugfix=bugfix,
             diff_size_lines=size,
             touches_test_files_only=tests_only,
@@ -234,7 +293,7 @@ class MissNullCheckPDetector(PatternDetector):
             total += W_VAR_USED_BEFORE
         if evidence.is_likely_bugfix:
             total += W_BUGFIX_MESSAGE
-        if evidence.adds_new_method_declaration:
+        if evidence.is_defensive_param_check:
             total -= PENALTY_ADDS_NEW_METHOD
         total = max(0.0, min(1.0, total))
         return round(total, 4)
@@ -301,17 +360,3 @@ def _variables_protected_by_null_check(added_lines: Sequence[str]) -> tuple[str,
 
 def _is_test_path(path: str) -> bool:
     return any(marker in path for marker in config.JAVA_TEST_PATH_MARKERS)
-
-
-def _declarations_in(lines: Sequence[str]) -> set[str]:
-    decls: set[str] = set()
-    for line in lines:
-        for match in _NEW_METHOD_DECL.finditer(line):
-            decls.add(_normalise_signature(match.group(0)))
-        for match in _NEW_TYPE_DECL.finditer(line):
-            decls.add(_normalise_signature(match.group(0)))
-    return decls
-
-
-def _normalise_signature(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip().rstrip("{").strip()

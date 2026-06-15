@@ -15,13 +15,13 @@ import pytest
 from src.diff_parser import parse_unified_diff
 from src.patterns.miss_null_check_p import (
     MissNullCheckPDetector,
-    adds_new_method_declaration,
     classify_line,
     detect_null_check,
     diff_size_lines,
     fix_replaces_existing_use,
     has_null_check_added,
     is_bugfix_message,
+    is_defensive_param_check,
     touches_test_files_only,
     variable_used_before,
 )
@@ -138,10 +138,10 @@ def test_fix_replaces_use_lang33_fixture():
     assert fix_replaces_existing_use(files[0]) is True
 
 
-# --- adds_new_method_declaration --------------------------------------------
-def test_adds_new_method_declaration_true_for_pure_addition_of_method():
-    """The canonical false positive: a fresh method with a null check at top
-    and zero removed lines in the file."""
+# --- is_defensive_param_check (v0.3.2 — replaces old adds_new_method_declaration)
+def test_is_defensive_param_check_true_when_null_check_on_method_param():
+    """Canonical defensive coding: pure addition of a method whose parameter
+    is null-checked at the boundary. Penalty must fire."""
     fd = FileDiff(
         path="Foo.java",
         patch="",
@@ -154,27 +154,32 @@ def test_adds_new_method_declaration_true_for_pure_addition_of_method():
         removed_lines=(),
         context_lines=(),
     )
-    assert adds_new_method_declaration(fd) is True
+    assert is_defensive_param_check(fd) is True
 
 
-def test_adds_new_method_declaration_true_for_new_class():
+def test_is_defensive_param_check_false_when_null_check_on_local_variable():
+    """Real fix shape: pure addition, but the null check protects a LOCAL
+    variable (not a parameter). Penalty must NOT fire — this is internal
+    fix territory."""
     fd = FileDiff(
         path="Foo.java",
         patch="",
         added_lines=(
-            "public class FooHelper {",
-            "if (x == null) return;",
+            "public Result lookup(String key) {",
+            "Object data = cache.get(key);",
+            "if (data == null) return fallback.compute(key);",
+            "return data.process();",
             "}",
         ),
         removed_lines=(),
         context_lines=(),
     )
-    assert adds_new_method_declaration(fd) is True
+    assert is_defensive_param_check(fd) is False
 
 
-def test_adds_new_method_declaration_false_when_file_also_removes_lines():
-    """A fix that adds a helper method while also removing code is a refactor
-    + fix, not a pure addition. Penalty must NOT fire."""
+def test_is_defensive_param_check_false_when_file_also_removes_lines():
+    """Any removed line in the file means it is not a pure addition. The
+    commit is modifying existing logic — treat as fix, no penalty."""
     fd = FileDiff(
         path="Foo.java",
         patch="",
@@ -187,39 +192,77 @@ def test_adds_new_method_declaration_false_when_file_also_removes_lines():
         removed_lines=("oldInlineCall(n);",),
         context_lines=(),
     )
-    assert adds_new_method_declaration(fd) is False
+    assert is_defensive_param_check(fd) is False
 
 
-def test_adds_new_method_declaration_false_when_only_modifying_body():
+def test_is_defensive_param_check_false_when_no_method_declared():
+    """Pure addition of a few lines inside an existing method body (with no
+    new method declaration) is not a defensive-param case."""
     fd = FileDiff(
         path="Foo.java",
         patch="",
         added_lines=("if (x == null) return null;",),
-        removed_lines=("// stub",),
-        context_lines=("public void existingMethod() {",),
+        removed_lines=(),
+        context_lines=("public void existingMethod(int x) {",),
     )
-    assert adds_new_method_declaration(fd) is False
+    assert is_defensive_param_check(fd) is False
 
 
-def test_adds_new_method_declaration_false_when_method_moved():
-    """A method present in both added and removed lines is a move (refactor)."""
-    signature = "public Result existing(Input input) {"
+def test_is_defensive_param_check_handles_constructor():
+    """Constructors are methods too — input validation in a new constructor
+    is defensive programming and must trigger the penalty."""
     fd = FileDiff(
         path="Foo.java",
         patch="",
-        added_lines=(signature, "if (input == null) return null;", "}"),
-        removed_lines=(signature, "// old body", "}"),
+        added_lines=(
+            "public Foo(Bar bar) {",
+            "if (bar == null) throw new IllegalArgumentException();",
+            "this.bar = bar;",
+            "}",
+        ),
+        removed_lines=(),
         context_lines=(),
     )
-    assert adds_new_method_declaration(fd) is False
+    assert is_defensive_param_check(fd) is True
 
 
-def test_adds_new_method_declaration_false_on_lang33_fixture():
-    """Lang 33 is a one-line fix inside an existing method, never introduces
-    a new declaration. This test guards against the regex incorrectly
-    matching ordinary code lines."""
+def test_is_defensive_param_check_handles_generics_in_param_list():
+    """Generic types must not confuse the parameter-name extractor:
+    ``Map<String, Object> data`` is one parameter named ``data``."""
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=(
+            "public void process(Map<String, Object> data) {",
+            "if (data == null) return;",
+            "}",
+        ),
+        removed_lines=(),
+        context_lines=(),
+    )
+    assert is_defensive_param_check(fd) is True
+
+
+def test_is_defensive_param_check_handles_annotations_and_final():
+    fd = FileDiff(
+        path="Foo.java",
+        patch="",
+        added_lines=(
+            "public void run(@NotNull final String name) {",
+            "if (name == null) return;",
+            "}",
+        ),
+        removed_lines=(),
+        context_lines=(),
+    )
+    assert is_defensive_param_check(fd) is True
+
+
+def test_is_defensive_param_check_false_on_lang33_fixture():
+    """Lang 33 is a surgical fix to existing logic — no method is declared.
+    Must remain unflagged regardless of the heuristic refinement."""
     files = parse_unified_diff(_read("lang_33.diff"))
-    assert adds_new_method_declaration(files[0]) is False
+    assert is_defensive_param_check(files[0]) is False
 
 
 # --- is_bugfix_message -------------------------------------------------------
@@ -269,7 +312,7 @@ def test_extract_evidence_for_lang33_like_commit():
     assert ev.null_check_construct is NullCheckKind.TERNARY
     assert ev.fix_replaces_existing_use is True
     assert ev.var_was_used_before is True
-    assert ev.adds_new_method_declaration is False
+    assert ev.is_defensive_param_check is False
     assert ev.is_likely_bugfix is True
     assert ev.touches_test_files_only is False
     assert ev.diff_size_lines >= 2

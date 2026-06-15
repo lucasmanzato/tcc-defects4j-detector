@@ -31,11 +31,16 @@ class BaseEvidence:
     subclass so each pattern keeps natural, domain-specific names. The
     ``kw_only=True`` flag avoids ordering issues when subclasses add their own
     required fields without defaults.
+
+    Note: ``adds_new_method_declaration`` used to be here in v0.2.0 / v0.3.1
+    but was removed in v0.3.2 because the new defensive-parameter check is
+    pattern-specific (it carries the semantics of "defensive programming
+    boundary" only for null-check patterns). See ``miss_null_check_p.py``
+    for the replacement (``is_defensive_param_check``).
     """
 
     fix_replaces_existing_use: bool
     var_was_used_before: bool
-    adds_new_method_declaration: bool
     is_likely_bugfix: bool
     diff_size_lines: int
     touches_test_files_only: bool
